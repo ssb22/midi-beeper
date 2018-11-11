@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
 # Version 1.63, (c) 2007-2010,2015-2017 Silas S. Brown.  License: GPL
