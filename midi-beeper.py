@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.63, (c) 2007-2010,2015-2017 Silas S. Brown.  License: GPL
+# Version 1.64, (c) 2007-2010,2015-2018 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -25,15 +25,21 @@ riscos_Maestro = 0
 
 # Can also convert MIDI files to BBC Micro programs
 # (printed to standard output).  Set bbc_micro below:
-bbc_micro = 0
-acorn_electron = 0 # Acorn Electron version (more limited)
+bbc_micro = 0 # or run with --bbc
+acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # set to make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
 # ----------------------------------------------------
 
-import os
+import os,sys
+def delArg(a):
+  found = a in sys.argv
+  if found: sys.argv.remove(a)
+  return found
+if delArg('--bbc'): bbc_micro = 1
+if delArg('--electron'): acorn_electron = 1
 
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
@@ -203,7 +209,7 @@ else: # beep
   if "ixp4xx beeper" in event:
     h=event[event.find("Handlers=",event.index("ixp4xx beeper")):]
     event="-e /dev/input/"+(h[:h.find("\n")].split()[-1])
-    import os ; os.system("sync") # just in case (beep has been known to crash NSLU2 Debian Etch in rare conditions)
+    os.system("sync") # just in case (beep has been known to crash NSLU2 Debian Etch in rare conditions)
   else: event=""
 
   def init():
@@ -409,7 +415,6 @@ def setBPM_block(bpm): return chr(6)+chr(allowed_BPMs.index(bpm))
 # Some of the code below is taken from Python Midi Package by Max M,
 # http://www.mxm.dk/products/public/pythonmidi
 # with much cutting-down and modifying
-import sys
 from types import StringType
 from cStringIO import StringIO
 from struct import pack, unpack
@@ -913,7 +918,7 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif bbc_micro: name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015 Silas S. Brown.  License: GPL\n")
+sys.stderr.write(name+" (c) 2007-2010, 2015-2018 Silas S. Brown.  License: GPL\n")
 if len(sys.argv)<2:
     sys.stderr.write("Syntax: python midi-beeper.py MIDI-filename ...\n")
     sys.exit(1)
@@ -973,4 +978,9 @@ if bbc_micro:
       if not use_input_loop: bbc_micro.append("LOMEM=P%") # because we didn't set it before (and might want to change MODE or something before running; anyway having it here makes it clearer what's going on if you see the screen at the end of the paste)
     elif len(bbc_micro)>1 and len(bbc_micro[-1])<233: bbc_micro[-1] += ",255,0"
     else: bbc_micro.append("D.255,0")
+    if not bbc_binary:
+      # AUTO automatically stops once the line number would be >= 32768.  We can use this to avoid having to put an Escape into the keyboard buffer.
+      # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the end of each chunk, AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own)
+      if len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1")
+      else: bbc_micro.insert(0,"AU."+str(32770-10*len(bbc_micro)))
     print "\n".join(bbc_micro)
