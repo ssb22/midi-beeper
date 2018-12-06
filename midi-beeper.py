@@ -982,6 +982,6 @@ if bbc_micro:
       # AUTO automatically stops once the line number would be >= 32768.  We can use this to avoid having to put an Escape into the keyboard buffer.
       # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the end of each chunk, AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own)
       bbc_micro = "\n".join(bbc_micro).split("\n")
-      if len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1")
+      if len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1") # (although if this is the case, program is extremely likely to exhaust the memory even in Bas128)
       else: bbc_micro.insert(0,"AU."+str(32770-10*len(bbc_micro)))
     print "\n".join(bbc_micro)
