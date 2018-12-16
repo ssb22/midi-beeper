@@ -28,6 +28,7 @@ riscos_Maestro = 0
 bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # set to make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
+# bbc_binary=0 works on Bas128 on a Master/B+, but speed issues affect timing.  bbc_binary=1 will need modifying to work on Bas128; the idea is to pack data into a smaller space so normal BASIC can be used
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -111,6 +112,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     lines = ("E%=TOP:" + bbc_micro[0]).split("\n") ; bbc_micro = []
     for i in range(len(lines)):
       bbc_micro.append("%d%s" % (i+1,lines[i]))
+    # Bas128 users would have to change this:
     bbc_micro.insert(0,"*TAPE\nPAGE=&E00\nNEW") # Could also use *ROM instead of *TAPE, which (besides saving 1 keystroke) has the advantage that the machine won't get stuck if you accidentally try file I/O when a tape recorder is not connected.  But if you DO have a tape recorder connected, *TAPE is harmless whereas *ROM may cause confusion.  If a Master might be in use, you might want to change this line to 'IF PAGE<>&E00:OSCLI("ROM"):PAGE=&E00\nNEW' so that the DFS is left active on the Master (although Master users can simply do *DISK or whatever to get it back anyway).
     # Could see the Mode 0 memory map with: MO.0:V.23;12;0;0;0;0;28,0,12,63,0
     # For larger MIDIs, can see sound queues etc (but not BASIC stack) via: MO.6:V.23;12;0;0;0;0;23;0;0;0;0;0:RUN
@@ -980,7 +982,7 @@ if bbc_micro:
     else: bbc_micro.append("D.255,0")
     if not bbc_binary:
       # AUTO automatically stops once the line number would be >= 32768.  We can use this to avoid having to put an Escape into the keyboard buffer.
-      # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the end of each chunk, AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own)
+      # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the beginning of each chunk (e.g. BeebEm 3 on Mac), AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own at the start of the next)
       bbc_micro = "\n".join(bbc_micro).split("\n")
       if len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1") # (although if this is the case, program is extremely likely to exhaust the memory even in Bas128)
       else: bbc_micro.insert(0,"AU."+str(32770-10*len(bbc_micro)))
