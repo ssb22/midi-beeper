@@ -28,7 +28,8 @@ riscos_Maestro = 0
 bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # set to make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
-# bbc_binary=0 works on Bas128 on a Master/B+, but speed issues affect timing.  bbc_binary=1 will need modifying to work on Bas128; the idea is to pack data into a smaller space so normal BASIC can be used
+
+# Bas128 support: Limited, as bank-switching delays impact the timing of shorter notes.  bbc_binary=0 works; bbc_binary=1 will need modifying, but the idea is to pack data into a smaller space so normal BASIC can be used
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -73,6 +74,8 @@ elif bbc_micro or acorn_electron:
   # N% = next available envelope number (1-16 if not using BPUT#, otherwise 1-4 but we don't want to redefine envelopes that are already associated with notes in the buffer).
   # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.  (Also making sure to special-case volume 0 so it doesn't use an envelope seems to make things a little more robust.  This is needed anyway in the Electron version below: the Electron uses a ULA with only 1 channel and 1 volume; last 6 envelope parameters are ignored and setting them to 0 does NOT switch off the sound like it does on the BBC)
   # c% is the current value of each 'channel' (252 i.e. 4*63 is used for silence); data read tells the program what changes to make to this array for the next chord & how long to sound it for (see add_midi_note_chord below).
+  # Lines 4 through 12 of this can be abbreviated thus: REP.:C%=0:REP.:READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.:U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3
+  # but Bas128 is still too slow (I'm not convinced it copies whole lines into low memory or anything like that)
   bbc_micro = ["""FOR C%=16 TO 19:SO.C%,0,0,0:N.
 N%=0:DIM c%(8)
 FOR D%=0 TO 8:c%(D%)=252:N.
@@ -112,7 +115,9 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     lines = ("E%=TOP:" + bbc_micro[0]).split("\n") ; bbc_micro = []
     for i in range(len(lines)):
       bbc_micro.append("%d%s" % (i+1,lines[i]))
-    # Bas128 users would have to change this:
+    # On a Model B (not needed on a Master), if you don't want to save the result to disk (which is hard anyway)
+    # we can claim back the DFS space as follows
+    # (Bas128 users should change this line to just NEW)
     bbc_micro.insert(0,"*TAPE\nPAGE=&E00\nNEW") # Could also use *ROM instead of *TAPE, which (besides saving 1 keystroke) has the advantage that the machine won't get stuck if you accidentally try file I/O when a tape recorder is not connected.  But if you DO have a tape recorder connected, *TAPE is harmless whereas *ROM may cause confusion.  If a Master might be in use, you might want to change this line to 'IF PAGE<>&E00:OSCLI("ROM"):PAGE=&E00\nNEW' so that the DFS is left active on the Master (although Master users can simply do *DISK or whatever to get it back anyway).
     # Could see the Mode 0 memory map with: MO.0:V.23;12;0;0;0;0;28,0,12,63,0
     # For larger MIDIs, can see sound queues etc (but not BASIC stack) via: MO.6:V.23;12;0;0;0;0;23;0;0;0;0;0:RUN
