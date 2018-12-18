@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.64, (c) 2007-2010,2015-2018 Silas S. Brown.  License: GPL
+# Version 1.65, (c) 2007-2010,2015-2018 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -27,9 +27,11 @@ riscos_Maestro = 0
 # (printed to standard output).  Set bbc_micro below:
 bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
-bbc_binary = 0 # set to make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
+bbc_binary = 0 # or run with --bbc-binary: make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
+bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) instead of printing keystrokes to standard output (set environment DFS_TITLE to title the disk)
 
-# Bas128 support: Limited, as bank-switching delays impact the timing of shorter notes.  bbc_binary=0 works; bbc_binary=1 will need modifying, but the idea is to pack data into a smaller space so normal BASIC can be used
+# HiBasic (Tube) support (~30k for programs) fully works
+# Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -42,6 +44,8 @@ def delArg(a):
   return found
 if delArg('--bbc'): bbc_micro = 1
 if delArg('--electron'): acorn_electron = 1
+if delArg('--bbc-binary'): bbc_binary=bbc_micro=1
+if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
 
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
@@ -111,14 +115,16 @@ SO.1,V%,P%,D%
 U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally run on the BBC Micro instead of the Electron it'll at least sound something
     current_array = [63]*3
   else: current_array = [63]*9
-  if bbc_binary: # don't use AUTO, and change to read RAM
+  if bbc_ssd:
+    bbc_micro = [] # we'll put tokenised program in later
+    bbc_binary = 1
+  elif bbc_binary: # don't use AUTO; change to read RAM
     lines = ("E%=TOP:" + bbc_micro[0]).split("\n") ; bbc_micro = []
     for i in range(len(lines)):
       bbc_micro.append("%d%s" % (i+1,lines[i]))
-    # On a Model B (not needed on a Master), if you don't want to save the result to disk (which is hard anyway)
-    # we can claim back the DFS space as follows
-    # (Bas128 users should change this line to just NEW)
-    bbc_micro.insert(0,"*TAPE\nPAGE=&E00\nNEW") # Could also use *ROM instead of *TAPE, which (besides saving 1 keystroke) has the advantage that the machine won't get stuck if you accidentally try file I/O when a tape recorder is not connected.  But if you DO have a tape recorder connected, *TAPE is harmless whereas *ROM may cause confusion.  If a Master might be in use, you might want to change this line to 'IF PAGE<>&E00:OSCLI("ROM"):PAGE=&E00\nNEW' so that the DFS is left active on the Master (although Master users can simply do *DISK or whatever to get it back anyway).
+    bbc_micro=[
+      "IF(PA. A.&FF00)>&E00:PA.=&E00:*ROM" # reclaim space from Model B DFS if applicable (may or may not be needed depending on which DFS is in use and how much space it takes, which we won't know at code-generation time)
+      "NEW"]+bbc_micro
     # Could see the Mode 0 memory map with: MO.0:V.23;12;0;0;0;0;28,0,12,63,0
     # For larger MIDIs, can see sound queues etc (but not BASIC stack) via: MO.6:V.23;12;0;0;0;0;23;0;0;0;0;0:RUN
     # (can also try MO.4)
@@ -246,6 +252,38 @@ else: # beep
     millisecs = microsecs / 1000
     if noteNos and cumulative_params and not "-D" in cumulative_params[-1].split()[-2:]: cumulative_params.append("-D 0") # necessary because Debian 5's beep adds a default delay otherwise
     cumulative_params.append(chord(map(to_freq,noteNos),millisecs))
+
+def make_bbcMicro_DFS_image(datBytes):
+    lomem_set = "\xd2=\xb8P+"+str(len(datBytes)-1)
+    assert not acorn_electron, "make_bbcMicro_DFS_image is hard-coded to use the BBC Micro reader, not Electron"
+    datBytes="\r\x00\x00"+chr(len(lomem_set)+4)+lomem_set+"\r\x00\n@E%=\xb8P:\xe3C%=16\xb819:\xd4C%,0,0,0:\xed:N%=0:\xdec%(8):\xe3D%=0\xb88:c%(D%)=252:\xed\r\x00\x14\xe5\xf5:C%=0:\xf5:D%=?E%:E%=E%+1:c%(C%)=(D%\x8063)*4:I%=(D%\x8164)+1:C%=C%+I%:\xfdI%=4:D%=?E%:E%=E%+1:\xf5:\xfd\x96-6>3:\xe3I%=0\xb86\x883:S%=0:T%=0:\xe7c%(I%)=252:V%=0:\x8b\xe7c%(I%+1)=252:V%=1:\x8bS%=1:Q%=c%(I%+1)-c%(I%):\xe7c%(I%+2)=252:V%=2:\x8bR%=c%(I%+2)-c%(I%+1):T%=1:V%=3\r\x00\x1e'\xe7V%:V%=V%*24+55:N%=N%+1:\xe7N%=17:N%=1\r\x00(4\xe7V%:\xe2N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%\r\x002$\xd4513+(I%\x813),V%,c%(I%),D%:\xed:\xfdD%=0\r\xff"+datBytes
+    sectors = 400 # total size of the disk (10 sectors per track, 40 or 80 tracks)
+    # sectors = int((len(datBytes)+255)/256)+3
+    opt4 = 3 # exec !BOOT
+    boot = "*BASIC\rLOAD \"TUNE\"\rLIST\rRUN\r" # or just CH.\"TUNE\"
+    disk_title = os.environ.get("DFS_TITLE","")
+    disk_title += "\0"*max(0,12-len(disk_title))
+    return "".join([
+        disk_title[:8],
+        "!BOOT  $", # file name and dir
+        "TUNE   $", # file name and dir
+        "\0"*8*29, # no other entries used
+        disk_title[8:12],
+        "\2", # disk cycle (??)
+        "\x10", # catalogue entries * 8 (- offset to end dir?)
+        chr((sectors>>8)+16*opt4),
+        chr(sectors&0xFF),
+        "\0"*4, # !BOOT lsb-msb Load, lsb-msb Exec
+        chr(len(boot))+"\0", # lsb-msb Length
+        "\0", # no >64k options or high start-sector bits
+        "\2", # starts on sector 2
+        "\0"*4, # TUNE lsb-msb Load, lsb-msb Exec (TODO: should these be &1900 for BASIC programs?)
+        chr(len(datBytes)&0xFF),chr(len(datBytes)>>8),
+        "\0", # no >64k options or high start-sector bits
+        "\3", # starts on sector 3
+        "\0"*8*29, # no other entries used
+        boot + "\0"*(256-len(boot)),
+        datBytes])
 
 dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro; TODO: default 'beep' cmd also?)
 def dedup_midi_note_chord(noteNos,microsecs):
@@ -922,7 +960,7 @@ except: # Python 2.3 (RISC OS?)
     return True
 
 if acorn_electron: name = "MIDI to Acorn Electron"
-elif bbc_micro: name = "MIDI to BBC Micro"
+elif not bbc_micro==0: name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
 sys.stderr.write(name+" (c) 2007-2010, 2015-2018 Silas S. Brown.  License: GPL\n")
@@ -935,7 +973,15 @@ for midiFile in sys.argv[1:]:
     sys.stderr.write("Parsing MIDI file "+midiFile+"\n")
     MidiInFile(MidiToBeep(), open(midiFile,"rb")).read()
     dedup_midi_note_chord([],None) # ensure flushed
-    if bbc_micro: pass # we'll end below (TODO: per-file?)
+    if not bbc_micro==0:
+      if bbc_ssd:
+        ssdFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","") + '.ssd'
+        sys.stderr.write("Writing BBC disk image "+ssdFile+"\n")
+        open(ssdFile,"wb").write(make_bbcMicro_DFS_image("".join(chr(x) for x in (bbc_micro+[255,0]))))
+        # and reset:
+        bbc_micro = []
+        for i in xrange(len(current_array)): current_array[i]=63
+      # else (BBC non-SSD) we'll end below (TODO: per-file?)
     elif riscos_Maestro:
         add_midi_note_chord([],0)
         maestroFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","") + ',af1'
@@ -946,7 +992,7 @@ for midiFile in sys.argv[1:]:
     elif not aplay:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
-if bbc_micro:
+if bbc_micro and not bbc_ssd:
     if bbc_binary: # need to get it in via indirection
       bbc_micro += [255,0]
 # :EQUD&12345678 - 14 keystrokes for 4 bytes
@@ -967,16 +1013,18 @@ if bbc_micro:
           bbc_micro[i] = "".join(buf) ; i += 1
         bbc_micro[i-1] += '*'
       # Make up the rest (or if not use_input_loop) :
+      # TODO: Bas128 gives a "Wrap" error if P% crosses a 16k boundary (even if it's only doing EQUB), so may want a "use plain old indirection" option (low priority because Bas128 has timing issues anyway)
       while i<len(bbc_micro):
        buf = ["[OPT2"]
        while i<len(bbc_micro) and len(buf)<16:
         for fmt,nBytes in [("EQUD&%X",4),("EQUW%d",2),("EQUB%d",1)]:
           if i+nBytes <= len(bbc_micro):
-            if nBytes==2 and i+3==len(bbc_micro) and bbc_micro[-1]==0: continue # in this case it might save a couple of keystrokes to end with EQUB *then* EQUW (if bbc_micro[i] is small; worst-case 255,255,0 is the same either way)
+            if nBytes==2 and i+3==len(bbc_micro) and bbc_micro[-1]==0: continue # in this case it might save a couple of keystrokes to end with EQUB *then* EQUW (if bbc_micro[i] is small; worst-case 255,255,0 is the same either way and the BRK optimisation could save 2 keystrokes if doing the EQUB second)
             val = 0
             for j in range(nBytes):
               val += (bbc_micro[i+j]<<(j*8))
-            buf.append(fmt % val)
+            if nBytes==1: buf.append({0:"BRK",10:"ASLA",0x18:"CLC",0x38:"SEC",0x58:"CLI",0x78:"SEI",0xb8:"CLV",0xD8:"CLD",0xF8:"SED",0x4A:"LSRA",0xEA:"NOP",0x40:"RTI",0x60:"RTS"}.get(val,fmt%val)) # occasionally save a couple of keystrokes over the EQUB (usually with a BRK at end)
+            else: buf.append(fmt % val)
             del bbc_micro[i:i+nBytes]
             bbc_offset += nBytes
             break
