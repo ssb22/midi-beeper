@@ -28,7 +28,7 @@ riscos_Maestro = 0
 bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # or run with --bbc-binary: make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
-bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) instead of printing keystrokes to standard output (set environment DFS_TITLE to title the disk)
+bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) instead of printing keystrokes to standard output (set environment DFS_TITLE to title the disk; disk will contain one BBC program for each MIDI file on the command line + bootloader)
 
 # HiBasic (Tube) support (~30k for programs) fully works
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
@@ -118,6 +118,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
   if bbc_ssd:
     bbc_micro = [] # we'll put tokenised program in later
     bbc_binary = 1
+    bbc_files = []
   elif bbc_binary: # don't use AUTO; change to read RAM
     lines = ("E%=TOP:" + bbc_micro[0]).split("\n") ; bbc_micro = []
     for i in range(len(lines)):
@@ -253,37 +254,55 @@ else: # beep
     if noteNos and cumulative_params and not "-D" in cumulative_params[-1].split()[-2:]: cumulative_params.append("-D 0") # necessary because Debian 5's beep adds a default delay otherwise
     cumulative_params.append(chord(map(to_freq,noteNos),millisecs))
 
-def make_bbcMicro_DFS_image(datBytes):
+def make_bbcMicro_DFS_image(datFiles):
+  opt4 = 3 # exec !BOOT
+  disk_title = os.environ.get("DFS_TITLE","")
+  disk_title += "\0"*max(0,12-len(disk_title))
+  # catalogue is 31 items but we'll do !BOOT separately
+  catNames,catInfo,catNo = ["\0"*8]*31,["\0"*8]*31,0
+  data = "*BASIC\r"
+  assert all(len(f)<=7 and re.match('^[A-Za-z0-9]*$',f) for f,_ in datFiles), "please keep DFS filenames to 7-char alphanumeric "+repr([f for f,_ in datFiles])
+  if "BOOT_COPYRIGHT" in os.environ: data += "\rREM "+os.environ["BOOT_COPYRIGHT"]+"\r\r" # TODO: document this?
+  if len(datFiles)==1: data += ('*LOAD "%s"\rLIST\rRUN\r' % datFiles[0][0])
+  else: data += "*CAT\r"+"REP.:U.AD.-6=15:".join(('CH."%s"\r' % f) for f,_ in datFiles)
+  nextSector = 2+int((len(data)+255)/256)
+  catNames[0]="!BOOT  $"
+  catInfo[0]="".join([
+    "\0"*4, # !BOOT lsb-msb Load, lsb-msb Exec
+    chr(len(data)&0xFF)+chr(len(data)>>8),
+    "\0", # no >64k options or high start-sector bits
+    "\2", # starts on sector 2
+    ])
+  data += "\0"*((256-(len(data)%256))&0xFF) # pad
+  for fname,datBytes in datFiles:
+    catNo += 1; assert catNo<31
     lomem_set = "\xd2=\xb8P+"+str(len(datBytes)-1)
     assert not acorn_electron, "make_bbcMicro_DFS_image is hard-coded to use the BBC Micro reader, not Electron"
     datBytes="\r\x00\x00"+chr(len(lomem_set)+4)+lomem_set+"\r\x00\n@E%=\xb8P:\xe3C%=16\xb819:\xd4C%,0,0,0:\xed:N%=0:\xdec%(8):\xe3D%=0\xb88:c%(D%)=252:\xed\r\x00\x14\xe5\xf5:C%=0:\xf5:D%=?E%:E%=E%+1:c%(C%)=(D%\x8063)*4:I%=(D%\x8164)+1:C%=C%+I%:\xfdI%=4:D%=?E%:E%=E%+1:\xf5:\xfd\x96-6>3:\xe3I%=0\xb86\x883:S%=0:T%=0:\xe7c%(I%)=252:V%=0:\x8b\xe7c%(I%+1)=252:V%=1:\x8bS%=1:Q%=c%(I%+1)-c%(I%):\xe7c%(I%+2)=252:V%=2:\x8bR%=c%(I%+2)-c%(I%+1):T%=1:V%=3\r\x00\x1e'\xe7V%:V%=V%*24+55:N%=N%+1:\xe7N%=17:N%=1\r\x00(4\xe7V%:\xe2N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%\r\x002$\xd4513+(I%\x813),V%,c%(I%),D%:\xed:\xfdD%=0\r\xff"+datBytes
-    sectors = 400 # total size of the disk (10 sectors per track, 40 or 80 tracks)
-    # sectors = int((len(datBytes)+255)/256)+3
-    opt4 = 3 # exec !BOOT
-    boot = "*BASIC\rLOAD \"TUNE\"\rLIST\rRUN\r" # or just CH.\"TUNE\"
-    disk_title = os.environ.get("DFS_TITLE","")
-    disk_title += "\0"*max(0,12-len(disk_title))
-    return "".join([
-        disk_title[:8],
-        "!BOOT  $", # file name and dir
-        "TUNE   $", # file name and dir
-        "\0"*8*29, # no other entries used
-        disk_title[8:12],
-        "\2", # disk cycle (??)
-        "\x10", # catalogue entries * 8 (- offset to end dir?)
-        chr((sectors>>8)+16*opt4),
-        chr(sectors&0xFF),
-        "\0"*4, # !BOOT lsb-msb Load, lsb-msb Exec
-        chr(len(boot))+"\0", # lsb-msb Length
-        "\0", # no >64k options or high start-sector bits
-        "\2", # starts on sector 2
-        "\0"*4, # TUNE lsb-msb Load, lsb-msb Exec (TODO: should these be &1900 for BASIC programs?)
-        chr(len(datBytes)&0xFF),chr(len(datBytes)>>8),
-        "\0", # no >64k options or high start-sector bits
-        "\3", # starts on sector 3
-        "\0"*8*29, # no other entries used
-        boot + "\0"*(256-len(boot)),
-        datBytes])
+    catNames[catNo]=fname+' '*(7-len(fname))+'$'
+    catInfo[catNo] = "".join([
+      "\0"*4, # lsb-msb Load, lsb-msb Exec (TODO: should these be &1900 for BASIC programs?)
+      chr(len(datBytes)&0xFF),chr(len(datBytes)>>8),
+      chr((2+int(len(data)/256))>>8), # should be max 2 bits (protected by whole-disk-size assert below)
+      chr((2+int(len(data)/256))&0xFF), # start sector
+    ])
+    data += datBytes
+    data += "\0"*((256-(len(data)%256))&0xFF) # pad
+  sectors = 2+len(data)/256
+  if sectors<400: sectors=400 # 40 tracks
+  elif sectors<800: sectors=800 # 80 tracks
+  else: assert 0, "Disk image too full" # (can in theory go to 1023 sectors, but no real hardware would support it)
+  while data[-1]=="\0": data=data[:-1] # TODO: inefficient
+  return "".join([
+    disk_title[:8],
+    "".join(catNames),
+    disk_title[8:12],
+    "\1", # disk cycle (BCD, incremented each time catalogue is written)
+    chr((1+catNo)*8),
+    chr((sectors>>8)+16*opt4),
+    chr(sectors&0xFF),
+    "".join(catInfo),
+    data])
 
 dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro; TODO: default 'beep' cmd also?)
 def dedup_midi_note_chord(noteNos,microsecs):
@@ -306,7 +325,7 @@ def dedup_midi_note_chord(noteNos,microsecs):
 
 A=440 # you can change this if you want to re-pitch
 midi_note_to_freq = []
-import math
+import math,re
 for i in range(128): midi_note_to_freq.append((A/32.0)*math.pow(2,(len(midi_note_to_freq)-9)/12.0))
 assert midi_note_to_freq[69] == A # (comment this out if using floating-point tuning because it might fail due to rounding)
 def to_freq(n):
@@ -960,7 +979,7 @@ except: # Python 2.3 (RISC OS?)
     return True
 
 if acorn_electron: name = "MIDI to Acorn Electron"
-elif not bbc_micro==0: name = "MIDI to BBC Micro"
+elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
 sys.stderr.write(name+" (c) 2007-2010, 2015-2018 Silas S. Brown.  License: GPL\n")
@@ -973,11 +992,12 @@ for midiFile in sys.argv[1:]:
     sys.stderr.write("Parsing MIDI file "+midiFile+"\n")
     MidiInFile(MidiToBeep(), open(midiFile,"rb")).read()
     dedup_midi_note_chord([],None) # ensure flushed
-    if not bbc_micro==0:
+    if bbc_micro or bbc_micro==[]:
       if bbc_ssd:
-        ssdFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","") + '.ssd'
-        sys.stderr.write("Writing BBC disk image "+ssdFile+"\n")
-        open(ssdFile,"wb").write(make_bbcMicro_DFS_image("".join(chr(x) for x in (bbc_micro+[255,0]))))
+        bbcFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","")
+        if os.sep in bbcFile: bbcFile=bbcFile[bbcFile.rindex(os.sep)+1:]
+        if not 0<len(bbcFile)<=7: bbcFile="TUNE%d" % (1+len(bbc_files))
+        bbc_files.append((bbcFile,"".join(chr(x) for x in (bbc_micro+[255,0]))))
         # and reset:
         bbc_micro = []
         for i in xrange(len(current_array)): current_array[i]=63
@@ -992,7 +1012,11 @@ for midiFile in sys.argv[1:]:
     elif not aplay:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
-if bbc_micro and not bbc_ssd:
+if bbc_files:
+  ssdFile=os.environ.get("DFS_TITLE","tunes")+".ssd"
+  sys.stderr.write("Writing output to %s\n" % ssdFile)
+  open(ssdFile,"wb").write(make_bbcMicro_DFS_image(bbc_files))
+elif bbc_micro:
     if bbc_binary: # need to get it in via indirection
       bbc_micro += [255,0]
 # :EQUD&12345678 - 14 keystrokes for 4 bytes
