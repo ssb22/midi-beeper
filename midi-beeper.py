@@ -263,19 +263,19 @@ def make_bbcMicro_DFS_image(datFiles):
   data = "*BASIC\r"
   assert all(len(f)<=7 and re.match('^[A-Za-z0-9]*$',f) for f,_ in datFiles), "please keep DFS filenames to 7-char alphanumeric "+repr([f for f,_ in datFiles])
   if "BOOT_COPYRIGHT" in os.environ: data += "\rREM "+os.environ["BOOT_COPYRIGHT"]+"\r\r" # TODO: document this?
-  if len(datFiles)==1: data += ('*LOAD "%s"\rLIST\rRUN\r' % datFiles[0][0])
+  if len(datFiles)==1: data += ('LOAD "%s"\rLIST\rRUN\r' % datFiles[0][0])
   else: data += "*CAT\r"+"REP.:U.AD.-6=15:".join(('CH."%s"\r' % f) for f,_ in datFiles)
   nextSector = 2+int((len(data)+255)/256)
   catNames[0]="!BOOT  $"
   catInfo[0]="".join([
     "\0"*4, # !BOOT lsb-msb Load, lsb-msb Exec
-    chr(len(data)&0xFF)+chr(len(data)>>8),
+    chr(len(data)&0xFF)+chr(len(data)>>8), # !BOOT len
     "\0", # no >64k options or high start-sector bits
     "\2", # starts on sector 2
     ])
-  data += "\0"*((256-(len(data)%256))&0xFF) # pad
+  data += "\0"*((256-(len(data)%256))&0xFF) # pad !BOOT
   for fname,datBytes in datFiles:
-    catNo += 1; assert catNo<31
+    catNo += 1; assert catNo<31,"Catalogue full"
     lomem_set = "\xd2=\xb8P+"+str(len(datBytes)-1)
     assert not acorn_electron, "make_bbcMicro_DFS_image is hard-coded to use the BBC Micro reader, not Electron"
     datBytes="\r\x00\x00"+chr(len(lomem_set)+4)+lomem_set+"\r\x00\n@E%=\xb8P:\xe3C%=16\xb819:\xd4C%,0,0,0:\xed:N%=0:\xdec%(8):\xe3D%=0\xb88:c%(D%)=252:\xed\r\x00\x14\xe5\xf5:C%=0:\xf5:D%=?E%:E%=E%+1:c%(C%)=(D%\x8063)*4:I%=(D%\x8164)+1:C%=C%+I%:\xfdI%=4:D%=?E%:E%=E%+1:\xf5:\xfd\x96-6>3:\xe3I%=0\xb86\x883:S%=0:T%=0:\xe7c%(I%)=252:V%=0:\x8b\xe7c%(I%+1)=252:V%=1:\x8bS%=1:Q%=c%(I%+1)-c%(I%):\xe7c%(I%+2)=252:V%=2:\x8bR%=c%(I%+2)-c%(I%+1):T%=1:V%=3\r\x00\x1e'\xe7V%:V%=V%*24+55:N%=N%+1:\xe7N%=17:N%=1\r\x00(4\xe7V%:\xe2N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%\r\x002$\xd4513+(I%\x813),V%,c%(I%),D%:\xed:\xfdD%=0\r\xff"+datBytes
