@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.65, (c) 2007-2010,2015-2018 Silas S. Brown.  License: GPL
+# Version 1.651, (c) 2007-2010,2015-2019 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -982,9 +982,9 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015-2018 Silas S. Brown.  License: GPL\n")
+sys.stderr.write(name+" (c) 2007-2010, 2015-2019 Silas S. Brown.  License: GPL\n")
 if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py MIDI-filename ...\n")
+    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd\n") # (all BBC-Micro related)
     sys.exit(1)
 for midiFile in sys.argv[1:]:
     init() ; dedup_chord,dedup_microsec = [],0
