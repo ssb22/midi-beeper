@@ -137,8 +137,8 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
       duration -= 254
     if not duration: return
     def f(n): # convert to SOUND/4 and bound the octaves
-      n -= 47 # MIDI note 69 is pitch 88 i.e. 4*22
-      while n<0: n+=12
+      n -= 47 # MIDI note 69 (A4) is pitch 88 i.e. 4*22
+      while n<0: n+=12 # TODO: unless we want to make a bass line using SOUND 0,-V,3,D with SOUND 1,0,P+188,D (won't work on acorn_electron, and if we use an envelope it'll have to have volume=1 as 0 won't work, otherwise best stick with single note), or SO.0,-V,2,D for approx. 1 tone below note 0 (which doesn't tie up channel 1).  Would need to know total number of notes there'll be before deciding if can do this.
       while n>=63: n-=12 # we're using 63 for rest
       return n
     if acorn_electron: noteNos = noteNos[-3:]
