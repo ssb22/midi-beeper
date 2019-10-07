@@ -1,4 +1,4 @@
 #!/bin/bash
 git pull --no-edit
-wget -N http://people.ds.cam.ac.uk/ssb22/mwrhome/midi-beeper.py
+wget -N http://ssb22.user.srcf.net/mwrhome/midi-beeper.py
 git commit -am update && git push
