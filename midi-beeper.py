@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.651, (c) 2007-2010,2015-2019 Silas S. Brown.  License: GPL
+# Version 1.652, (c) 2007-2010,2015-2019 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -232,7 +232,8 @@ else: # beep
   min_pulseLength, max_pulseLength = 10,20 # milliseconds
   repetitions_to_aim_for = 1 # arpeggiating each chord only once will do if it's brief
   def chord(freqList,millisecs):
-    if not freqList: return " -D %d" % (millisecs,) # rest
+    if not millisecs: return ""
+    elif not freqList: return " -D %d" % (millisecs,) # rest
     elif len(freqList)==1: return " -n -f %d -l %d" % (freqList[0],millisecs) # one note
     else:
         pulseLength = max(min(millisecs/len(freqList)/repetitions_to_aim_for,max_pulseLength),min_pulseLength)
