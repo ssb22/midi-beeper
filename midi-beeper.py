@@ -79,7 +79,7 @@ elif bbc_micro or acorn_electron:
   # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.  (Also making sure to special-case volume 0 so it doesn't use an envelope seems to make things a little more robust.  This is needed anyway in the Electron version below: the Electron uses a ULA with only 1 channel and 1 volume; last 6 envelope parameters are ignored and setting them to 0 does NOT switch off the sound like it does on the BBC)
   # c% is the current value of each 'channel' (252 i.e. 4*63 is used for silence); data read tells the program what changes to make to this array for the next chord & how long to sound it for (see add_midi_note_chord below).
   # Lines 4 through 12 of this can be abbreviated thus: REP.:C%=0:REP.:READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.:U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3
-  # but Bas128 is still too slow (I'm not convinced it copies whole lines into low memory or anything like that)
+  # but Bas128 is still too slow, even with the main loop all on 1 line.  So it seems it does not copy code into main memory on a line-by-line basis and therefore cannot be optimised by putting a loop on 1 line in this way.
   bbc_micro = ["""FOR C%=16 TO 19:SO.C%,0,0,0:N.
 N%=0:DIM c%(8)
 FOR D%=0 TO 8:c%(D%)=252:N.
@@ -138,7 +138,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     if not duration: return
     def f(n): # convert to SOUND/4 and bound the octaves
       n -= 47 # MIDI note 69 (A4) is pitch 88 i.e. 4*22
-      while n<0: n+=12 # TODO: unless we want to make a bass line using SOUND 0,-V,3,D with SOUND 1,0,P+188,D (won't work on acorn_electron, and if we use an envelope it'll have to have volume=1 as 0 won't work, otherwise best stick with single note), or SO.0,-V,2,D for approx. 1 tone below note 0 (which doesn't tie up channel 1).  Would need to know total number of notes there'll be before deciding if can do this.
+      while n<0: n+=12 # TODO: unless we want to make a bass line using SOUND 0,-V,3,D with SOUND 1,E,P+188,D (won't work on acorn_electron; envelope E will have to set its volume params to 0, or stick with single note), or SO.0,-V,2,D for approx. 1 tone below note 0 (which doesn't tie up channel 1).  Would need to know total number of notes there'll be before deciding if can do this.  Anyway such low notes are rather indistinct on BBC hardware
       while n>=63: n-=12 # we're using 63 for rest
       return n
     if acorn_electron: noteNos = noteNos[-3:]
