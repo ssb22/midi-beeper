@@ -3,7 +3,7 @@
 # MIDI beeper (plays MIDI without sound hardware)
 # Version 1.652, (c) 2007-2010,2015-2019 Silas S. Brown.  License: GPL
 
-# MIDI beeper is a Python program to play MIDI by beeping
+# MIDI beeper is a Python 2 program to play MIDI by beeping
 # through the computer's beeper instead of using proper
 # sound circuits.  It emulates chords/polyphony.
 # It sounds awful, but it might be useful when no sound device
@@ -34,6 +34,11 @@ bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) inste
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
+
+# History is in https://github.com/ssb22/midi-beeper.git
+# or https://gitlab.com/ssb22/midi-beeper.git
+# or https://bitbucket.org/ssb22/midi-beeper.git
+# but some early versions are missing from these repositories
 
 # ----------------------------------------------------
 

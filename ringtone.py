@@ -1,11 +1,16 @@
+#!/usr/bin/env python
+#   (works on both Python 2 and Python 3)
+
 # MIDI ringtone generator (c) Silas S. Brown, License: GPL
 # Some code taken from Python Midi Package by Max M,
 # http://www.mxm.dk/products/public/pythonmidi
 
-import sys
-if not sys.version_info[0]==2: sys.stderr.write("WARNING: may break if not on Python 2.x (preferably 2.7)\n")
-from types import StringType
-from cStringIO import StringIO
+# History is in https://github.com/ssb22/midi-beeper.git
+# or https://gitlab.com/ssb22/midi-beeper.git
+# or https://bitbucket.org/ssb22/midi-beeper.git
+
+try: from cStringIO import StringIO # Python 2
+except: from io import BytesIO as StringIO # Python 3
 from struct import pack, unpack
 def writeBew(value, length):
     return pack('>%s' % {1:'B', 2:'H', 4:'L'}[length], value)
@@ -27,12 +32,16 @@ def to_n_bits(value, length=1, nbits=7):
     bytes = [(value >> (i*nbits)) & 0x7F for i in range(length)]
     bytes.reverse()
     return bytes
+def B(s):
+    if type("")==type(u""): return s.encode("utf-8") # Python 3
+    else: return s # Python 2
 def fromBytes(value):
     if not value:
-        return ''
+        return B('')
     return pack('%sB' % len(value), *value)
 class RawOutstreamFile:
-    def __init__(self, outfile=''):
+    def __init__(self, outfile=None):
+        if not outfile: outfile = B('')
         self.buffer = StringIO()
         self.outfile = outfile
     def writeSlice(self, str_slice):
@@ -43,7 +52,7 @@ class RawOutstreamFile:
         var = self.writeSlice(writeVar(value))
     def write(self):
         if self.outfile:
-            if isinstance(self.outfile, StringType):
+            if type(self.outfile)==str:
                 outfile = open(self.outfile, 'wb')
                 outfile.write(self.getvalue())
                 outfile.close()
@@ -58,8 +67,6 @@ MIDI_CH_PREFIX  = 0x20
 MIDI_PORT       = 0x21      
 END_OF_TRACK    = 0x2F      
 TEMPO           = 0x51      
-FILE_HEADER     = 'MThd'
-TRACK_HEADER    = 'MTrk'
 TIMING_CLOCK   = 0xF8
 ACTIVE_SENSING = 0xFE
 SYSTEM_RESET   = 0xFF
@@ -68,12 +75,13 @@ def is_status(byte):
     return (byte & 0x80) == 0x80 
 class MidiOutFile:
     def update_time(self, new_time=0):
-        self._relative_time += new_time
+        self._relative_time += int(new_time)
     def reset_time(self):
         self._relative_time = 0
     def rel_time(self):
         return self._relative_time
-    def __init__(self, raw_out=''):
+    def __init__(self, raw_out=None):
+        if not raw_out: raw_out = B('')
         self.raw_out = RawOutstreamFile(raw_out)
         self._relative_time = 0
         self._current_track = 0
@@ -95,7 +103,7 @@ class MidiOutFile:
         self.event_slice(slc)
     def header(self, format=0, nTracks=1, division=96):
         raw = self.raw_out
-        raw.writeSlice('MThd')
+        raw.writeSlice(B('MThd'))
         bew = raw.writeBew
         bew(6, 4) 
         bew(format, 2)
@@ -116,7 +124,7 @@ class MidiOutFile:
         self._current_track += 1
     def end_of_track(self):
         raw = self.raw_out
-        raw.writeSlice(TRACK_HEADER)
+        raw.writeSlice(B('MTrk'))
         track_data = self._current_track_buffer.getvalue()
         eot_slice = writeVar(self.rel_time()) + fromBytes([META_EVENT, END_OF_TRACK, 0])
         raw.writeBew(len(track_data)+len(eot_slice), 4)
@@ -153,4 +161,4 @@ for velocity in [0x40,0x40,0x50,0x60,0,0x60,0x70,0x7f,0x7f,0,0x30,0x20,0x10,0x10
     mof.update_time(totalCycleLen/2)
 mof.end_of_track()
 mof.eof()
-print "Generated a ringtone.mid (run again for another)"
+print ("Generated a ringtone.mid (run again for another)")

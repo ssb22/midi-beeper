@@ -15,7 +15,8 @@
  * warranties of merchantability or fitness for a particular use or ability to 
  * breed pandas in captivity, it just can't be done.
  *
- * Bug me, I like it:  http://johnath.com/  or johnath@johnath.com
+ * Original author's contact:  http://johnath.com/  or johnath@johnath.com
+ * but note that this version was modified for NSLU2 / Debian 5
  */
 
 #include <fcntl.h>
