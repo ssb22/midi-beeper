@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.652, (c) 2007-2010,2015-2019 Silas S. Brown.  License: GPL
+# Version 1.653, (c) 2007-2010,2015-2020 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python 2 program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -80,27 +80,47 @@ elif bbc_micro or acorn_electron:
   # 9 channels of sound onto the BBC Micro's 3 channels.
   # Basically uses ENVELOPEs to do the pitch multiplexing.
   # BBC Micro's BASIC encouraged the use of @% through Z% by reserving memory for them (heap is typically small), so code can be quite obscure.
-  # N% = next available envelope number (1-16 if not using BPUT#, otherwise 1-4 but we don't want to redefine envelopes that are already associated with notes in the buffer).
-  # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.  (Also making sure to special-case volume 0 so it doesn't use an envelope seems to make things a little more robust.  This is needed anyway in the Electron version below: the Electron uses a ULA with only 1 channel and 1 volume; last 6 envelope parameters are ignored and setting them to 0 does NOT switch off the sound like it does on the BBC)
-  # c% is the current value of each 'channel' (252 i.e. 4*63 is used for silence); data read tells the program what changes to make to this array for the next chord & how long to sound it for (see add_midi_note_chord below).
-  # Lines 4 through 12 of this can be abbreviated thus: REP.:C%=0:REP.:READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.:U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3
-  # but Bas128 is still too slow, even with the main loop all on 1 line.  So it seems it does not copy code into main memory on a line-by-line basis and therefore cannot be optimised by putting a loop on 1 line in this way.
-  bbc_micro = ["""FOR C%=16 TO 19:SO.C%,0,0,0:N.
-N%=0:DIM c%(8)
-FOR D%=0 TO 8:c%(D%)=252:N.
-REP.:C%=0
-REP.:READ D%
-c%(C%)=(D% AND 63)*4
-I%=(D% DIV 64)+1:C%=C%+I%:U.I%=4
-READ D%
-REP.:U.ADVAL(-6)>3
-FOR I%=0 TO 6 STEP 3
-S%=0:T%=0
-IF c%(I%)=252:V%=0:ELSE IF c%(I%+1)=252:V%=1:ELSE S%=1:Q%=c%(I%+1)-c%(I%):IF c%(I%+2)=252:V%=2:ELSE R%=c%(I%+2)-c%(I%+1):T%=1:V%=3
-IF V%:V%=V%*24+55:N%=N%+1:IF N%=17:N%=1
-IF V%:ENV.N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%
-SO.513+(I%DIV3),V%,c%(I%),D%
-N.:U.D%=0:END"""]
+  bbc_micro = ["FOR C%=16 TO 19:SO.C%,0,0,0:N.\n" # flush all sound buffers, just in case
+               "N%=0:" # N% = next available envelope number (1-16 if not using BPUT#, otherwise 1-4 but we don't want to redefine envelopes that are already associated with notes in the buffer)
+               "DIM c%(8)\n" # c% is the current value of each 'channel'; 252 i.e. 4*63 is used for silence.  Data read tells the program what changes to make to this array for the next chord and for how long to sound it (see add_midi_note_chord below).
+               "FOR D%=0 TO 8:c%(D%)=252:N.\n" # all channels start with silence
+               # The next few lines can be abbreviated thus: "REP.:C%=0:REP.:READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.:U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3" (237 keystrokes, out of a limit of 238).  But Bas128 is still too slow, even with the read loop all on 1 line like this.
+               "REP.:C%=0\n" # C% is the write-index for our 'current chord' c%
+               "REP.:READ D%\n" # lowest 6 bits = semitone no. (which we multiply by 4 to get pitch number); highest 2 bits = array-pointer increment - 1 (so we can increment 1, 2 or 3 places; an "increment" of 4 means end of chord)
+               "c%(C%)=(D% AND 63)*4\n" # set pitch
+               "I%=(D% DIV 64)+1:C%=C%+I%:U.I%=4\n" # c% array now all set
+               "READ D%\n" # This will be the duration of the chord just specified
+               "REP.:U.ADVAL(-6)>3\n" # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.
+               "FOR I%=0 TO 6 STEP 3\n" # handling our 'channels' as triples, up to 3 being arpeggiated into one BBC Micro channel; I% will be the index-start of each triple
+               "S%=0:" # will be set to 1 if the second section of the envelope is used
+               "T%=0\n" # will be set to 1 if the third section of the envelope is used
+               "IF c%(I%)=252:V%=0:" # no volume if entire channel is silent (see special case below)
+               "ELSE IF c%(I%+1)=252:V%=1:" # entire channel has just one note, so play it at "volume 1".  TODO: if c%(I%) is high, consider 'wobbling' the pitch to mask the SN76489's tuning inaccuracy of high notes, e.g. by setting S%=1:Q%=1.  This can be done inline (using the fact that BBC BASIC represents true as -1) using something like "S%=-(c%(I%)>150):Q%=S%:" here.  Would need to check if 150 really is a good threshold, and, if it works, also modify the datBytes string in make_bbcMicro_DFS_image: beware line-length bytes etc; will probably have to stop using the 'abbreviated' version if these extra 2 assignments would make the line too long.
+               "ELSE S%=1:Q%=c%(I%+1)-c%(I%):" # channel has at least 2 notes, so set Q% to the first pitch difference, and set S% to enable 2nd section of envelope
+               "IF c%(I%+2)=252:V%=2:" # channel has exactly 2 notes, so play it at "volume 2"
+               "ELSE R%=c%(I%+2)-c%(I%+1):T%=1:V%=3\n" # channel has 3 notes, so play it at "volume 3", set R% to second pitch difference, and set T% to enable 3rd section of envelope
+               # (here ends what can be abbreviated as per the 'abbreviated' comment above)
+               "IF V%:" # The following operations are done only if volume is not 0.  We special-case volume 0 so it doesn't use an envelope at all; this (along with the ADVAL loop above) seems to make things a little more robust, as short pauses between notes are frequent.  A special-case of volume 0 is needed anyway in the Electron version below: the Electron uses a ULA with only 1 channel and 1 volume; the last 6 envelope parameters are ignored and setting them to 0 does NOT switch off the sound like it does on the BBC.
+               "V%=V%*24+55:" # 79, 103 or 127
+               "N%=N%+1:IF N%=17:N%=1" # next available envelope number
+               "\nIF V%:" # (still only if volume is not 0)
+               "ENV.N%," # setting envelope number N%
+               "3," # length of each step in centiseconds
+               "0," # first section should sound the 1st note
+               "Q%," # second section adds Q% to the pitch for each step
+               "R%," # third section adds R% to the pitch for each step
+               "1," # first section should have 1 step (for sounding the 1st note)
+               "S%," # second section should have either 0 steps (if not used) or 1 step (for sounding note + Q%)
+               "T%," # third section should have either 0 steps (if not used) or 1 step (for sounding note + Q% + R%)
+               "V%,0,0,-V%," # ADSR (attack, decay, sustain, release) change per step
+               "V%," # attack final volume
+               "V%" # decay final volume
+               ":V%=N%\n" # for the SOUND command below
+               "SO.513+(I%DIV3)," # 512 = sync=2 i.e. 3 channels are to receive a note before it is to start; +1 because we're not using channel 0
+               "V%," # envelope number or 0
+               "c%(I%)," # first pitch of the arpeggio (or plain pitch if no arpeggio)
+               "D%\n" # duration
+               "N.:U.D%=0:END"]
   if acorn_electron:
     # Cut-down version of the above code for the Electron:
     bbc_micro=["""SO.1,0,0,0
@@ -129,7 +149,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     for i in range(len(lines)):
       bbc_micro.append("%d%s" % (i+1,lines[i]))
     bbc_micro=[
-      "IF(PA. A.&FF00)>&E00:PA.=&E00:*ROM" # reclaim space from Model B DFS if applicable (may or may not be needed depending on which DFS is in use and how much space it takes, which we won't know at code-generation time)
+      "IF(PA. A.&FF00)>&E00:PA.=&E00:*ROM" # reclaim space from Model B DFS if applicable (may or may not be needed depending on which DFS is in use and how much space it takes, which we won't know at code-generation time, so test at runtime if we're above E00 and not in second-processor addresses.  If using Acorn's DFS on Model B, may be able to reduce PAGE from &1900 to &1800 if not using *BUILD, to &1700 if no other ROMs will borrow space from DFS, to &1300 if using OPEN on max 1 file, or to &1100 if not using OPEN or SPOOL/EXEC, but Watford DFS and others will be different so it's safer to just turn it off.)
       "NEW"]+bbc_micro
     # Could see the Mode 0 memory map with: MO.0:V.23;12;0;0;0;0;28,0,12,63,0
     # For larger MIDIs, can see sound queues etc (but not BASIC stack) via: MO.6:V.23;12;0;0;0;0;23;0;0;0;0;0:RUN
@@ -143,14 +163,15 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     if not duration: return
     def f(n): # convert to SOUND/4 and bound the octaves
       n -= 47 # MIDI note 69 (A4) is pitch 88 i.e. 4*22
-      while n<0: n+=12 # TODO: unless we want to make a bass line using SOUND 0,-V,3,D with SOUND 1,E,P+188,D (won't work on acorn_electron; envelope E will have to set its volume params to 0, or stick with single note), or SO.0,-V,2,D for approx. 1 tone below note 0 (which doesn't tie up channel 1).  Would need to know total number of notes there'll be before deciding if can do this.  Anyway such low notes are rather indistinct on BBC hardware
+      while n<0: n+=12 # TODO: unless we want to make a bass line using SOUND 0,-V,3,D with SOUND 1,E,P+188,D (won't work on acorn_electron; envelope E will have to set its volume params to 0, or stick with single note), or SO.0,-V,2,D for approx. 1 tone below note 0 (which doesn't tie up channel 1).  Would need to know total number of notes there'll be before deciding if can do this.  Anyway such low notes are rather indistinct on BBC hardware.
       while n>=63: n-=12 # we're using 63 for rest
       return n
     if acorn_electron: noteNos = noteNos[-3:]
     noteNos = map(f,noteNos[-9:])
     while len(noteNos)<3: noteNos.append(63)
-    if not acorn_electron: # divide evenly among BBC channels
-      # (and if need arpeggiation, prefer it in the bass)
+    if not acorn_electron:
+      # Divide the notes evenly among BBC channels,
+      # and if need arpeggiation, prefer it in the bass.
       for a,b in [(9,0),(7,0),(9,3),(8,3),(9,6),(9,6)]:
         if len(noteNos)<a: noteNos.insert(len(noteNos)-b,63)
     # Check range of arpeggiation pitch increments, adjust
@@ -174,7 +195,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     o.append(duration)
     if bbc_binary:
       for i in o: bbc_micro.append(int(i))
-    else: # self-contained typeable BBC BASIC
+    else: # self-contained typeable BBC BASIC, assuming AUTO
       o = ",".join(map(lambda x:("%d"%x), o))
       if len(bbc_micro)>1 and len(bbc_micro[-1])+len(o)+1 <= 238: bbc_micro[-1] += ','+o
       else: bbc_micro.append("D."+o)
@@ -284,10 +305,10 @@ def make_bbcMicro_DFS_image(datFiles):
     catNo += 1; assert catNo<31,"Catalogue full"
     lomem_set = "\xd2=\xb8P+"+str(len(datBytes)-1)
     assert not acorn_electron, "make_bbcMicro_DFS_image is hard-coded to use the BBC Micro reader, not Electron"
-    datBytes="\r\x00\x00"+chr(len(lomem_set)+4)+lomem_set+"\r\x00\n@E%=\xb8P:\xe3C%=16\xb819:\xd4C%,0,0,0:\xed:N%=0:\xdec%(8):\xe3D%=0\xb88:c%(D%)=252:\xed\r\x00\x14\xe5\xf5:C%=0:\xf5:D%=?E%:E%=E%+1:c%(C%)=(D%\x8063)*4:I%=(D%\x8164)+1:C%=C%+I%:\xfdI%=4:D%=?E%:E%=E%+1:\xf5:\xfd\x96-6>3:\xe3I%=0\xb86\x883:S%=0:T%=0:\xe7c%(I%)=252:V%=0:\x8b\xe7c%(I%+1)=252:V%=1:\x8bS%=1:Q%=c%(I%+1)-c%(I%):\xe7c%(I%+2)=252:V%=2:\x8bR%=c%(I%+2)-c%(I%+1):T%=1:V%=3\r\x00\x1e'\xe7V%:V%=V%*24+55:N%=N%+1:\xe7N%=17:N%=1\r\x00(4\xe7V%:\xe2N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%\r\x002$\xd4513+(I%\x813),V%,c%(I%),D%:\xed:\xfdD%=0\r\xff"+datBytes
+    datBytes="\r\x00\x00"+chr(len(lomem_set)+4)+lomem_set+"\r\x00\n@E%=\xb8P:\xe3C%=16\xb819:\xd4C%,0,0,0:\xed:N%=0:\xdec%(8):\xe3D%=0\xb88:c%(D%)=252:\xed\r\x00\x14\xe5\xf5:C%=0:\xf5:D%=?E%:E%=E%+1:c%(C%)=(D%\x8063)*4:I%=(D%\x8164)+1:C%=C%+I%:\xfdI%=4:D%=?E%:E%=E%+1:\xf5:\xfd\x96-6>3:\xe3I%=0\xb86\x883:S%=0:T%=0:\xe7c%(I%)=252:V%=0:\x8b\xe7c%(I%+1)=252:V%=1:\x8bS%=1:Q%=c%(I%+1)-c%(I%):\xe7c%(I%+2)=252:V%=2:\x8bR%=c%(I%+2)-c%(I%+1):T%=1:V%=3\r\x00\x1e'\xe7V%:V%=V%*24+55:N%=N%+1:\xe7N%=17:N%=1\r\x00(4\xe7V%:\xe2N%,3,0,Q%,R%,1,S%,T%,V%,0,0,-V%,V%,V%:V%=N%\r\x002$\xd4513+(I%\x813),V%,c%(I%),D%:\xed:\xfdD%=0\r\xff"+datBytes # This essentially tokenises the program with the 'abbreviated' version of the loop (and indirection instead of READ).  If changing it, the embedded binary line lengths will also need updating.
     catNames[catNo]=fname+' '*(7-len(fname))+'$'
     catInfo[catNo] = "".join([
-      "\0"*4, # lsb-msb Load, lsb-msb Exec (TODO: should these be &1900 for BASIC programs?)
+      "\0"*4, # lsb-msb Load, lsb-msb Exec (apparently not used for BASIC programs)
       chr(len(datBytes)&0xFF),chr(len(datBytes)>>8),
       chr((2+int(len(data)/256))>>8), # should be max 2 bits (protected by whole-disk-size assert below)
       chr((2+int(len(data)/256))&0xFF), # start sector
@@ -298,7 +319,6 @@ def make_bbcMicro_DFS_image(datFiles):
   if sectors<400: sectors=400 # 40 tracks
   elif sectors<800: sectors=800 # 80 tracks
   else: assert 0, "Disk image too full" # (can in theory go to 1023 sectors, but no real hardware would support it)
-  while data[-1]=="\0": data=data[:-1] # TODO: inefficient
   return "".join([
     disk_title[:8],
     "".join(catNames),
@@ -308,7 +328,7 @@ def make_bbcMicro_DFS_image(datFiles):
     chr((sectors>>8)+16*opt4),
     chr(sectors&0xFF),
     "".join(catInfo),
-    data])
+    data.rstrip("\0")])
 
 dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro; TODO: default 'beep' cmd also?)
 def dedup_midi_note_chord(noteNos,microsecs):
