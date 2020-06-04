@@ -4,8 +4,8 @@
 # MIDI ringtone generator (c) Silas S. Brown, License: GPL
 # See http://ssb22.user.srcf.net/compos/noise.html#ringtone
 
-# Some code taken from Python Midi Package by Max M,
-# http://www.mxm.dk/products/public/pythonmidi
+# Some code was taken from an old version of
+# Python Midi Package by Max M.
 
 # History is in https://github.com/ssb22/midi-beeper.git
 # or https://gitlab.com/ssb22/midi-beeper.git

@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.653, (c) 2007-2010,2015-2020 Silas S. Brown.  License: GPL
+# Version 1.67, (c) 2007-2010,2015-2020 Silas S. Brown.  License: GPL
 
 # MIDI beeper is a Python 2 program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -29,6 +29,7 @@ bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # or run with --bbc-binary: make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
 bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) instead of printing keystrokes to standard output (set environment DFS_TITLE to title the disk; disk will contain one BBC program for each MIDI file on the command line + bootloader)
+bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.T.Russell's BBC BASIC for SDL (best on bbcsdl 1.13 or above)
 
 # HiBasic (Tube) support (~30k for programs) fully works
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
@@ -51,6 +52,8 @@ if delArg('--bbc'): bbc_micro = 1
 if delArg('--electron'): acorn_electron = 1
 if delArg('--bbc-binary'): bbc_binary=bbc_micro=1
 if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
+if delArg('--bbc-sdl'): bbc_sdl=bbc_micro=1
+assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
@@ -95,7 +98,7 @@ elif bbc_micro or acorn_electron:
                "S%=0:" # will be set to 1 if the second section of the envelope is used
                "T%=0\n" # will be set to 1 if the third section of the envelope is used
                "IF c%(I%)=252:V%=0:" # no volume if entire channel is silent (see special case below)
-               "ELSE IF c%(I%+1)=252:V%=1:" # entire channel has just one note, so play it at "volume 1".  TODO: if c%(I%) is high, consider 'wobbling' the pitch to mask the SN76489's tuning inaccuracy of high notes, e.g. by setting S%=1:Q%=1.  This can be done inline (using the fact that BBC BASIC represents true as -1) using something like "S%=-(c%(I%)>150):Q%=S%:" here.  Would need to check if 150 really is a good threshold, and, if it works, also modify the datBytes string in make_bbcMicro_DFS_image: beware line-length bytes etc; will probably have to stop using the 'abbreviated' version if these extra 2 assignments would make the line too long.
+               "ELSE IF c%(I%+1)=252:V%=1:" # entire channel has just one note, so play it at "volume 1".  TODO: if c%(I%) is high, consider 'wobbling' the pitch to mask the SN76489's tuning inaccuracy of high notes, e.g. by setting S%=1:Q%=1.  This can be done inline (using the fact that BBC BASIC represents true as -1) using something like "S%=-(c%(I%)>150):Q%=S%:" here.  Would need to check if 150 really is a good threshold, and, if it works, also modify the datBytes string in make_bbcMicro_DFS_image: beware line-length bytes etc; will probably have to stop using the 'abbreviated' version if these extra 2 assignments would make the line too long.  Also check the bbc_sdl .replace of V%=1 below doesn't undo it (and consider turning it off if INKEY(-256) detects SDL-etc, as that environment has better tuning to begin with)
                "ELSE S%=1:Q%=c%(I%+1)-c%(I%):" # channel has at least 2 notes, so set Q% to the first pitch difference, and set S% to enable 2nd section of envelope
                "IF c%(I%+2)=252:V%=2:" # channel has exactly 2 notes, so play it at "volume 2"
                "ELSE R%=c%(I%+2)-c%(I%+1):T%=1:V%=3\n" # channel has 3 notes, so play it at "volume 3", set R% to second pitch difference, and set T% to enable 3rd section of envelope
@@ -198,6 +201,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     else: # self-contained typeable BBC BASIC, assuming AUTO
       o = ",".join(map(lambda x:("%d"%x), o))
       if len(bbc_micro)>1 and len(bbc_micro[-1])+len(o)+1 <= 238: bbc_micro[-1] += ','+o
+      elif bbc_sdl: bbc_micro.append("DATA"+o) # must write out longhand to ensure compatibility, and must count it here for line lengths in case we end up on real BBC
       else: bbc_micro.append("D."+o)
   def init():
     global dedup_microsec_quantise
@@ -502,8 +506,8 @@ def setBPM_block(bpm): return chr(6)+chr(allowed_BPMs.index(bpm))
 
 # End RISC OS Maestro code
 
-# Some of the code below is taken from Python Midi Package by Max M,
-# http://www.mxm.dk/products/public/pythonmidi
+# Some of the code below was taken from an old version of
+# Python Midi Package by Max M,
 # with much cutting-down and modifying
 from types import StringType
 from cStringIO import StringIO
@@ -1038,7 +1042,7 @@ for midiFile in sys.argv[1:]:
     elif not aplay:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
-if bbc_files:
+if bbc_ssd and bbc_files:
   ssdFile=os.environ.get("DFS_TITLE","tunes")+".ssd"
   sys.stderr.write("Writing output to %s\n" % ssdFile)
   open(ssdFile,"wb").write(make_bbcMicro_DFS_image(bbc_files))
@@ -1084,9 +1088,26 @@ elif bbc_micro:
     elif len(bbc_micro)>1 and len(bbc_micro[-1])<233: bbc_micro[-1] += ",255,0"
     else: bbc_micro.append("D.255,0")
     if not bbc_binary:
+      bbc_micro = "\n".join(bbc_micro).split("\n")
+      if bbc_sdl:
+        bbc_micro = "\n".join(bbc_micro)
+        # bbc_sdl doesn't recognise keyword abbreviations, so write them all out longhand:
+        bbc_micro = bbc_micro.replace("D.","DATA").replace("N.","NEXT").replace("U.","UNTIL").replace("SO.","SOUND").replace("REP.","REPEAT").replace("ENV.","ENVELOPE")
+        # *TEMPO 64+n should be available on bbcsdl 1.13+ to make ENVELOPE pitch repeat behave like the BBC Micro ('s','S' detects SDL C or assembly) : see bbcsdl bug #3.  On earlier versions of BBC SDL, this bug will mess up the pitches whenever we have more than 6 notes in a chord (or more than 2 on the Electron, if you really want code that's compatible with both the Electron and SDL).
+        bbc_micro = bbc_micro.replace("N%=0","IF(INKEY(-256)AND223)=83:*TEMPO 69\nN%=0")
+        # ... but at least we can work around the bug in the case of 2 notes per channel, by using a 0-length 3rd step that negates the 2nd step's change, which should clear up any piece with 6 notes or fewer per chord:
+        bbc_micro = bbc_micro.replace("V%=1","V%=1:Q%=0:R%=0")
+        if acorn_electron: bbc_micro=bbc_micro.replace("Q%=c%(1)-P%","Q%=c%(1)-P%:R%=-Q%")
+        else: bbc_micro=bbc_micro.replace("V%=2","V%=2:R%=-Q%")
+        # Add 1 octave if BBC BASIC for SDL (or BBC BASIC for Windows) is detected, because it's pitched an octave lower than the real BBC :
+        bbc_micro=bbc_micro.replace("N%=0","A%=-48*((INKEY(-256)AND219)=83):N%=0")
+        if acorn_electron: bbc_micro=bbc_micro.replace("P%,","P%+A%,")
+        else: bbc_micro=bbc_micro.replace("c%(I%),","c%(I%)+A%,")
+        # end of modifications for bbc_sdl
+        bbc_micro = bbc_micro.split("\n")
+      # If not bbc_sdl (and not bbc_binary), use AUTO.
       # AUTO automatically stops once the line number would be >= 32768.  We can use this to avoid having to put an Escape into the keyboard buffer.
       # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the beginning of each chunk (e.g. BeebEm 3 on Mac), AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own at the start of the next)
-      bbc_micro = "\n".join(bbc_micro).split("\n")
-      if len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1") # (although if this is the case, program is extremely likely to exhaust the memory even in Bas128)
+      elif len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1") # (although if this is the case, program is extremely likely to exhaust the memory even in Bas128)
       else: bbc_micro.insert(0,"AU."+str(32770-10*len(bbc_micro)))
     print "\n".join(bbc_micro)
