@@ -29,7 +29,7 @@ bbc_micro = 0 # or run with --bbc
 acorn_electron = 0 # or run with --electron: Acorn Electron version (more limited)
 bbc_binary = 0 # or run with --bbc-binary: make the above use direct memory access instead of DATA (packs more in but harder to save/edit)
 bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) instead of printing keystrokes to standard output (set environment DFS_TITLE to title the disk; disk will contain one BBC program for each MIDI file on the command line + bootloader)
-bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.T.Russell's BBC BASIC for SDL (best on bbcsdl 1.13 or above).  Code still runs on the real BBC too, but is larger.
+bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.T.Russell's BBC BASIC for SDL.  Code still runs on the real BBC too, but is larger.
 
 # HiBasic (Tube) support (~30k for programs) fully works
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
@@ -143,6 +143,7 @@ SO.1,V%,P%,D%
 U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally run on the BBC Micro instead of the Electron it'll at least sound something
     current_array = [63]*3
   else: current_array = [63]*9
+  if bbc_sdl: bbc_micro[0]="COLOUR 128:COLOUR 7:CLS\n"+bbc_micro[0] # BBC SDL defaults to white background: be easier on the eyes by having dark mode like the original BBC
   if bbc_ssd:
     bbc_micro = [] # we'll put tokenised program in later
     bbc_binary = 1
@@ -158,6 +159,8 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     # For larger MIDIs, can see sound queues etc (but not BASIC stack) via: MO.6:V.23;12;0;0;0;0;23;0;0;0;0;0:RUN
     # (can also try MO.4)
     bbc_micro = ["\n".join(bbc_micro).replace("READ D%","D%=?E%:E%=E%+1")]
+  keystroke_limit = 238
+  if bbc_sdl: keystroke_limit -= 5 # assuming up to 3 keystrokes for the backward-compatibility line number (can be up to 5, but if it gets as high as 4 then we're looking at a 230k+ program which is not going to fit in any version of the BBC Micro anyway so we might as well disregard the BBC Micro's keystroke buffer limit), + 2 keystrokes for "D." to "DATA"
   def add_midi_note_chord(noteNos,microsecs):
     duration = int((microsecs*20+500000)/1000000)
     while duration > 254: # unlikely but we should cover this
@@ -172,6 +175,9 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     if acorn_electron: noteNos = noteNos[-3:]
     noteNos = map(f,noteNos[-9:])
     while len(noteNos)<3: noteNos.append(63)
+    if bbc_sdl and (len(noteNos)>6 or (acorn_electron and len(noteNos)>2)) and not '*TEMPO' in bbc_micro[0]:
+      # *TEMPO 64+n should be available on bbcsdl 1.13+ to make ENVELOPE pitch repeat behave like the BBC Micro ('s','S' detects SDL C or assembly) : see bbcsdl bug #3
+      bbc_micro[0]="REM As there are chords with three\nREM notes per channel, you will need\nREM BBC SDL 1.13+ or 'real' BBCBASIC\nREM for the ENVELOPEs to sound right.\nREM\n"+bbc_micro[0].replace("N%=0","IF(INKEY(-256)AND223)=83:*TEMPO 69\nN%=0")
     if not acorn_electron:
       # Divide the notes evenly among BBC channels,
       # and if need arpeggiation, prefer it in the bass.
@@ -200,8 +206,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
       for i in o: bbc_micro.append(int(i))
     else: # self-contained typeable BBC BASIC, assuming AUTO
       o = ",".join(map(lambda x:("%d"%x), o))
-      if len(bbc_micro)>1 and len(bbc_micro[-1])+len(o)+1 <= 238: bbc_micro[-1] += ','+o
-      elif bbc_sdl: bbc_micro.append(str(len(bbc_micro)+len(bbc_micro[0].split('\n'))+1)+"DATA"+o)
+      if len(bbc_micro)>1 and len(bbc_micro[-1])+len(o)+1 <= keystroke_limit: bbc_micro[-1] += ','+o
       else: bbc_micro.append("D."+o)
   def init():
     global dedup_microsec_quantise
@@ -1092,20 +1097,18 @@ elif bbc_micro:
       if bbc_sdl:
         # bbc_sdl doesn't recognise keyword abbreviations, so use longhand:
         bbc_micro = "\n".join(bbc_micro).replace("D.","DATA").replace("N.","NEXT").replace("U.","UNTIL").replace("SO.","SOUND").replace("REP.","REPEAT").replace("ENV.","ENVELOPE")
-        # *TEMPO 64+n should be available on bbcsdl 1.13+ to make ENVELOPE pitch repeat behave like the BBC Micro ('s','S' detects SDL C or assembly) : see bbcsdl bug #3.  On earlier versions of BBC SDL, this bug will mess up the pitches whenever we have more than 6 notes in a chord (or more than 2 on the Electron, if you really want code that's compatible with both the Electron and SDL).
-        bbc_micro = bbc_micro.replace("N%=0","IF(INKEY(-256)AND223)=83:*TEMPO 69\nN%=0")
-        # ... but at least we can work around the bug in the case of 2 notes per channel, by using a 0-length 3rd step that negates the 2nd step's change, which should clear up any piece with 6 notes or fewer per chord:
+        # Work around bbc_sdl bug #3 (on 1.12 and below) in the case of 2 notes per channel, by using a 0-length 3rd step that negates the 2nd step's change, which should clear up any piece with 6 notes or fewer per chord:
         bbc_micro = bbc_micro.replace("V%=1","V%=1:Q%=0:R%=0")
         if acorn_electron: bbc_micro=bbc_micro.replace("Q%=c%(1)-P%","Q%=c%(1)-P%:R%=-Q%")
         else: bbc_micro=bbc_micro.replace("V%=2","V%=2:R%=-Q%")
-        # Add 1 octave if BBC BASIC for SDL (or BBC BASIC for Windows) is detected, because it's pitched an octave lower than the real BBC :
+        # Add 1 octave if BBC BASIC for SDL (or BBC BASIC for Windows) is detected, because it's pitched an octave lower than the real BBC (well, we could use *VOICE c,5 to emphasize the first harmonic, but we'd have to check which versions support it and it's not quite the same) :
         bbc_micro=bbc_micro.replace("N%=0","A%=-48*((INKEY(-256)AND219)=83):N%=0")
         if acorn_electron: bbc_micro=bbc_micro.replace("P%,","P%+A%,")
         else: bbc_micro=bbc_micro.replace("c%(I%),","c%(I%)+A%,")
         # add line numbers, in case we're on a real BBC (as we can't use AUTO, which cannot be conditioned on INKEY(-256)); already added line numbers to DATA lines (so we know max length on real BBC) but others need adding:
         bbc_micro = bbc_micro.split("\n")
         for i in xrange(len(bbc_micro)):
-          if bbc_micro[i][0] not in '123456789': bbc_micro[i]=str(i+1)+bbc_micro[i]
+          bbc_micro[i]=str(i+1)+bbc_micro[i]
       # If not bbc_sdl (and not bbc_binary), use AUTO.
       # AUTO automatically stops once the line number would be >= 32768.  We can use this to avoid having to put an Escape into the keyboard buffer.
       # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the beginning of each chunk (e.g. BeebEm 3 on Mac), AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own at the start of the next)
