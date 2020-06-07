@@ -175,9 +175,8 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
     if acorn_electron: noteNos = noteNos[-3:]
     noteNos = map(f,noteNos[-9:])
     while len(noteNos)<3: noteNos.append(63)
-    if bbc_sdl and (len(noteNos)>6 or (acorn_electron and len(noteNos)>2)) and not '*TEMPO' in bbc_micro[0]:
-      # *TEMPO 64+n should be available on bbcsdl 1.13+ to make ENVELOPE pitch repeat behave like the BBC Micro ('s','S' detects SDL C or assembly) : see bbcsdl bug #3
-      bbc_micro[0]="REM As there are chords with three\nREM notes per channel, you will need\nREM BBC SDL 1.13+ or 'real' BBCBASIC\nREM for the ENVELOPEs to sound right.\nREM\n"+bbc_micro[0].replace("N%=0","IF(INKEY(-256)AND223)=83:*TEMPO 69\nN%=0")
+    if bbc_sdl and (len(noteNos)>6 or (acorn_electron and len(noteNos)>2)) and not '1.13+' in bbc_micro[0]:
+      bbc_micro[0]="REM As there are chords with three\nREM notes per channel, you will need\nREM BBC SDL 1.13+ or 'real' BBCBASIC\nREM for the ENVELOPEs to sound right.\nREM\n"+bbc_micro[0] # see bbcsdl bug #3
     if not acorn_electron:
       # Divide the notes evenly among BBC channels,
       # and if need arpeggiation, prefer it in the bass.
