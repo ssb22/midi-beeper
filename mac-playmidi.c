@@ -2,11 +2,16 @@
 // external MIDI port, or to software synthesis if
 // no external device is connected.
 
-// Silas S. Brown 2020 - public domain - no warranty.
+// v1.1 - Silas S. Brown 2020 - public domain, no warranty
 
 // Compile: cc -o /usr/local/bin/playmidi mac-playmidi.c -framework CoreFoundation -framework AudioToolbox -framework CoreMIDI
 
 // Run: playmidi file.mid [speed multiplier [start second [stop second]]]
+
+// Where to find history:
+// https://github.com/ssb22/midi-beeper.git
+// or https://gitlab.com/ssb22/midi-beeper.git
+// or https://bitbucket.org/ssb22/midi-beeper.git
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +25,7 @@ void helpAndExit() {
 }
 
 int main (int argc,const char*argv[]) {
-  fputs("playmidi 1.0 - Silas S. Brown 2020 - public domain\n",stderr);
+  fputs("playmidi 1.1 - Silas S. Brown 2020 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
   const char *filename = argv[1];
   if(!strcmp(filename,"-")) filename="/dev/stdin";
@@ -52,9 +57,15 @@ int main (int argc,const char*argv[]) {
       fprintf(stderr,"Invalid stop time: %s\n",argv[4]);
       helpAndExit();
     }
-  } else { // stop at end of index track
-    MusicTrack t; MusicSequenceGetIndTrack(musicSeq,0,&t);
-    UInt32 n=sizeof(MusicTimeStamp); MusicTrackGetProperty(t,kSequenceTrackProperty_TrackLength,&stopPoint,&n);
+  } else { // stop at end of longest track
+    UInt32 nTracks; if(MusicSequenceGetTrackCount(musicSeq, &nTracks)) nTracks=1;
+    MusicTimeStamp maxStopPoint;
+    for(int trackNo=0; trackNo<nTracks; trackNo++) {
+      MusicTrack t; MusicSequenceGetIndTrack(musicSeq,trackNo,&t);
+      UInt32 n=sizeof(MusicTimeStamp); MusicTrackGetProperty(t,kSequenceTrackProperty_TrackLength,&stopPoint,&n);
+      if(!trackNo || stopPoint>maxStopPoint) maxStopPoint = stopPoint;
+      else stopPoint=maxStopPoint;
+    }
   }
   double stopSecs; MusicSequenceGetSecondsForBeats(musicSeq,stopPoint,&stopSecs);
   double playRate = 1.0;
