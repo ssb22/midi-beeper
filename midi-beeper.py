@@ -37,8 +37,9 @@ bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
 # History is in https://github.com/ssb22/midi-beeper.git
-# or https://gitlab.com/ssb22/midi-beeper.git
-# or https://bitbucket.org/ssb22/midi-beeper.git
+# and https://gitlab.com/ssb22/midi-beeper.git
+# and https://bitbucket.org/ssb22/midi-beeper.git
+# and https://gitlab.developers.cam.ac.uk/ssb22/midi-beeper
 # but some early versions are missing from these repositories
 
 # ----------------------------------------------------

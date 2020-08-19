@@ -10,8 +10,9 @@
 
 // Where to find history:
 // https://github.com/ssb22/midi-beeper.git
-// or https://gitlab.com/ssb22/midi-beeper.git
-// or https://bitbucket.org/ssb22/midi-beeper.git
+// and https://gitlab.com/ssb22/midi-beeper.git
+// and https://bitbucket.org/ssb22/midi-beeper.git
+// and https://gitlab.developers.cam.ac.uk/ssb22/midi-beeper
 
 #include <stdio.h>
 #include <stdlib.h>
