@@ -2,7 +2,7 @@
 // external MIDI port, or to software synthesis if
 // no external device is connected.
 
-// v1.1 - Silas S. Brown 2020 - public domain, no warranty
+// v1.11 - Silas S. Brown 2020 - public domain, no warranty
 
 // Compile: cc -o /usr/local/bin/playmidi mac-playmidi.c -framework CoreFoundation -framework AudioToolbox -framework CoreMIDI
 
@@ -26,7 +26,7 @@ void helpAndExit() {
 }
 
 int main (int argc,const char*argv[]) {
-  fputs("playmidi 1.1 - Silas S. Brown 2020 - public domain\n",stderr);
+  fputs("playmidi 1.11 - Silas S. Brown 2020 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
   const char *filename = argv[1];
   if(!strcmp(filename,"-")) filename="/dev/stdin";
@@ -72,7 +72,7 @@ int main (int argc,const char*argv[]) {
   double playRate = 1.0;
   if(argc>2) {
     playRate=atof(argv[2]);
-    if(!playRate) {
+    if(playRate<=0) {
       fprintf(stderr,"Not a speed: %s\n",argv[2]);
       helpAndExit();
     } MusicPlayerSetPlayRateScalar(mPlayer,playRate);
