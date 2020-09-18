@@ -2,7 +2,7 @@
 // external MIDI port, or to software synthesis if
 // no external device is connected.
 
-// v1.11 - Silas S. Brown 2020 - public domain, no warranty
+// v1.12 - Silas S. Brown 2020 - public domain, no warranty
 
 // Compile: cc -o /usr/local/bin/playmidi mac-playmidi.c -framework CoreFoundation -framework AudioToolbox -framework CoreMIDI
 
@@ -21,15 +21,13 @@
 
 void helpAndExit() {
   fputs("Syntax: playmidi file.mid [speed multiplier [start second [stop second]]]\n",stderr);
-  fputs("(set file.mid to - to use /dev/stdin)\n",stderr);
   exit(1);
 }
 
 int main (int argc,const char*argv[]) {
-  fputs("playmidi 1.11 - Silas S. Brown 2020 - public domain\n",stderr);
+  fputs("playmidi 1.12 - Silas S. Brown 2020 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
   const char *filename = argv[1];
-  if(!strcmp(filename,"-")) filename="/dev/stdin";
   MusicSequence musicSeq; NewMusicSequence(&musicSeq);
   if(MusicSequenceFileLoad(musicSeq,CFURLCreateFromFileSystemRepresentation(NULL,(const UInt8*)filename,strlen(filename),false),kMusicSequenceFile_MIDIType,0)) {
     fprintf(stderr,"Cannot load MIDI from %s\n",filename);
