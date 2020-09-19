@@ -16,12 +16,19 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
 
 void helpAndExit() {
   fputs("Syntax: playmidi file.mid [speed multiplier [start second [stop second]]]\n",stderr);
   exit(1);
+}
+
+volatile int gotInterrupt = 0;
+void stopMusic(int sig) {
+  gotInterrupt = 1;
 }
 
 int main (int argc,const char*argv[]) {
@@ -76,11 +83,12 @@ int main (int argc,const char*argv[]) {
     } MusicPlayerSetPlayRateScalar(mPlayer,playRate);
   }
   MusicPlayerStart(mPlayer);
+  signal(SIGINT,stopMusic);
   MusicTimeStamp now; double nowSecs;
   do {
     usleep(100000/playRate);
     if(!MusicPlayerGetTime(mPlayer, &now) && !MusicSequenceGetSecondsForBeats(musicSeq,now,&nowSecs))
       fprintf(stderr,"\r%.1lf/%.1lf",nowSecs,stopSecs);
-  } while(now<stopPoint);
+  } while(now<stopPoint && !gotInterrupt);
   MusicPlayerStop(mPlayer); fputs("\n",stderr); return 0;
 }
