@@ -31,7 +31,7 @@ void stopMusic(int sig) {
   gotInterrupt = 1;
 }
 
-int main (int argc,const char*argv[]) {
+int main(int argc,const char*argv[]) {
   fputs("playmidi 1.12 - Silas S. Brown 2020 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
   const char *filename = argv[1];
