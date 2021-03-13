@@ -11,6 +11,7 @@
 # and https://gitlab.com/ssb22/midi-beeper.git
 # and https://bitbucket.org/ssb22/midi-beeper.git
 # and https://gitlab.developers.cam.ac.uk/ssb22/midi-beeper
+# and in China: https://gitee.com/ssb22/midi-beeper
 
 try: from cStringIO import StringIO # Python 2
 except: from io import BytesIO as StringIO # Python 3

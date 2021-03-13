@@ -21,6 +21,7 @@
 # and https://gitlab.com/ssb22/midi-beeper.git
 # and https://bitbucket.org/ssb22/midi-beeper.git
 # and https://gitlab.developers.cam.ac.uk/ssb22/midi-beeper
+# and in China: https://gitee.com/ssb22/midi-beeper
 
 if [ "$(python --version 2>&1|sed -e 's/.* //' -e 's/[.].*//')" == 2 ]; then
   export Python2=python # bundled with Mac OS X 10.14 and below
