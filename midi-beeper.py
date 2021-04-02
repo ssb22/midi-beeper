@@ -1,7 +1,8 @@
 #!/usr/bin/env python2
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.67, (c) 2007-2010,2015-2020 Silas S. Brown.  License: GPL
+# Version 1.68, (c) 2007-2010,2015-2021 Silas S. Brown
+# License: Apache 2 (see below)
 
 # MIDI beeper is a Python 2 program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -35,6 +36,18 @@ bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 # History is in https://github.com/ssb22/midi-beeper.git
 # and https://gitlab.com/ssb22/midi-beeper.git

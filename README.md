@@ -18,7 +18,9 @@ MIDI beeper can also generate polyphonic square waves itself and feed them to ap
 Copyright and Trademarks
 ------------------------
 
-© Silas S. Brown, Licensed under the GPL.
+© Silas S. Brown, Licensed under Apache 2.
+
+* Apache is a registered trademark of The Apache Software Foundation.
 
 * Debian is a trademark owned by Software in the Public Interest, Inc.
 
