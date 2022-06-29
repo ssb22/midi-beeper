@@ -1,10 +1,11 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
+# (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.68, (c) 2007-2010,2015-2021 Silas S. Brown
+# Version 1.7, (c) 2007-2010,2015-2022 Silas S. Brown
 # License: Apache 2 (see below)
 
-# MIDI beeper is a Python 2 program to play MIDI by beeping
+# MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
 # sound circuits.  It emulates chords/polyphony.
 # It sounds awful, but it might be useful when no sound device
@@ -20,9 +21,9 @@ aplay = 0
 # Can also convert MIDI files to RISC OS Maestro music files
 # for playing (but not typesetting well) on 'vanilla' RISC OS.
 # Set riscos_Maestro = 1 below if you want this.
-riscos_Maestro = 0
-# If running this *on* RISC OS (Python 2.3) you might find it useful to set:
-# import sys ; sys.argv.append("$.!Boot.Loader.test/mid") # (or whatever)
+# (Defaults to 1 when script is run on RISC OS, unless one
+# of the BBC Micro options is specified instead.)
+riscos_Maestro = 0 # or run with --maestro
 
 # Can also convert MIDI files to BBC Micro programs
 # (printed to standard output).  Set bbc_micro below:
@@ -63,6 +64,7 @@ def delArg(a):
   found = a in sys.argv
   if found: sys.argv.remove(a)
   return found
+if delArg('--maestro'): riscos_Maestro = 1
 if delArg('--bbc'): bbc_micro = 1
 if delArg('--electron'): acorn_electron = 1
 if delArg('--bbc-binary'): bbc_binary=bbc_micro=1
@@ -70,15 +72,23 @@ if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
 if delArg('--bbc-sdl'): bbc_sdl=bbc_micro=1
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
+on_riscos = sys.platform.lower().find("riscos")>=0
+if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
+
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
   o = os.popen("aplay -q -t raw -c 1 -f U8 -r %d" % rate,"w")
+  try:
+    oWrap,o = o,o.buffer # Python 3
+    def bchr(n): return bytes((n,))
+  except AttributeError: bchr = chr # Python 2
   def init(): pass
   def chord(freqs,millisecs):
     samples = millisecs * rate / 1000 ; halfPeriods = []
     for f in freqs: halfPeriods.append(rate/2.0/f)
     assert not 0 in halfPeriods
-    nextFlips = map(int,halfPeriods) ; counts = [1]*len(halfPeriods)
+    nextFlips = list(map(int,halfPeriods))
+    counts = [1]*len(halfPeriods)
     val = 0
     if nextFlips: next=[aplay/len(halfPeriods)]*len(halfPeriods)
     else: next = []
@@ -90,9 +100,9 @@ if aplay:
             next[i] = -next[i]
             counts[i] += 1
             nextFlips[i] = int(counts[i]*halfPeriods[i]) # necessary especially at low rates as periods are rarely integers
-        o.write(chr(val)) ; t += 1
+        o.write(bchr(val)) ; t += 1
   def add_midi_note_chord(noteNos,microsecs):
-    chord(map(to_freq,noteNos),microsecs / 1000)
+    chord(list(map(to_freq,noteNos)),microsecs / 1000)
 elif bbc_micro or acorn_electron:
   # This is a compact BBC Micro program to multiplex up to
   # 9 channels of sound onto the BBC Micro's 3 channels.
@@ -188,7 +198,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
       while n>=63: n-=12 # we're using 63 for rest
       return n
     if acorn_electron: noteNos = noteNos[-3:]
-    noteNos = map(f,noteNos[-9:])
+    noteNos = list(map(f,noteNos[-9:]))
     while len(noteNos)<3: noteNos.append(63)
     if bbc_sdl and (len(noteNos)>6 or (acorn_electron and len(noteNos)>2)) and not '1.13+' in bbc_micro[0]:
       bbc_micro[0]="REM As there are chords with three\nREM notes per channel, you will need\nREM BBC SDL 1.13+ or 'real' BBCBASIC\nREM for the ENVELOPEs to sound right.\nREM\n"+bbc_micro[0] # see bbcsdl bug #3
@@ -228,7 +238,7 @@ U.D%=0:END"""] # the 126,etc is there so that if this program is accidentally ru
 elif riscos_Maestro:
   allowed_BPMs = [40, 50, 60, 65, 70, 80, 90, 100, 115, 130, 145, 160, 175, 190, 210]
   default_bpm = max(allowed_BPMs) # theoretically gives the most accuracy
-  hemi_microsecs = 3750000/default_bpm # for now (ms/hemi = beat/hemi / (b/min * min/microsec) = 1/16 / (bpm / 60000000) = 60000000/16/bpm)
+  hemi_microsecs = int(3750000/default_bpm) # for now (ms/hemi = beat/hemi / (b/min * min/microsec) = 1/16 / (bpm / 60000000) = 60000000/16/bpm)
   def add_midi_note_chord(noteNos,microsecs):
     noteNos.reverse()
     global current_time
@@ -262,6 +272,9 @@ elif riscos_Maestro:
       if q and staves<4: staves += 1 # helps with more accurate playing if each part has its own stave (pity there's a maximum of 4)
     if not staves: staves = 1
     return Maestro_header+setBPM_block(default_bpm)+setVolumes_block()+musicData_block(queues)+setStaves_block(staves)+setInstruments_block()
+  if type("")==type(u""): # Python 3
+    maestroData_real = maestroData
+    def maestroData(): return maestroData_real().encode('latin1')
   def init():
     global current_chord,current_time,riscos_channels
     current_chord = [] ; current_time = 0 ; riscos_channels = [[],[],[],[],[],[],[],[]]
@@ -302,7 +315,7 @@ else: # beep
   def add_midi_note_chord(noteNos,microsecs):
     millisecs = microsecs / 1000
     if noteNos and cumulative_params and not "-D" in cumulative_params[-1].split()[-2:]: cumulative_params.append("-D 0") # necessary because Debian 5's beep adds a default delay otherwise
-    cumulative_params.append(chord(map(to_freq,noteNos),millisecs))
+    cumulative_params.append(chord(list(map(to_freq,noteNos)),millisecs))
 
 def make_bbcMicro_DFS_image(datFiles):
   opt4 = 3 # exec !BOOT
@@ -352,6 +365,10 @@ def make_bbcMicro_DFS_image(datFiles):
     chr(sectors&0xFF),
     "".join(catInfo),
     data.rstrip("\0")])
+if type("")==type(u""): # Python 3
+  real_make_bbcMicro_DFS_image = make_bbcMicro_DFS_image
+  def make_bbcMicro_DFS_image(datFiles):
+    return real_make_bbcMicro_DFS_image(datFiles).encode('latin1')
 
 dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro; TODO: default 'beep' cmd also?)
 def dedup_midi_note_chord(noteNos,microsecs):
@@ -402,9 +419,9 @@ class MidiNote:
         lTry,lH = 1,64 ; ret = []
         while hemisLeft:
             while hemisLeft >= lH and lH <= barHemisLeft:
-                lHT = lH ; dots = 0 ; dotVal = lH/2
+                lHT = lH ; dots = 0 ; dotVal = int(lH/2)
                 while dotVal and lHT+dotVal <= hemisLeft and dots<3 and lHT+dotVal <= barHemisLeft:
-                    dots += 1 ; lHT += dotVal ; dotVal /=2
+                    dots += 1 ; lHT += dotVal ; dotVal = int(dotVal/2)
                 hemisLeft -= lHT ; barHemisLeft -= lHT ; ret.append((lTry,dots))
                 if not barHemisLeft:
                     barHemisLeft = 64 # TODO: assumes 4/4
@@ -461,9 +478,9 @@ def playLen(secondNoterestByte): # for gate-byte sync
     secondNoterestByte = int(secondNoterestByte/32)
     l = 8 # so can *=1.5 3 times and still have an integer
     for i in range(secondNoterestByte,7): l *= 2
-    dotVal = l*0.5
+    dotVal = int(l/2)
     for i in range(numDots):
-      l += dotVal ; dotVal /= 2
+      l += dotVal ; dotVal = int(dotVal/2)
     return l
 
 def gatesBytes(notesRestQueues):
@@ -528,8 +545,6 @@ def setBPM_block(bpm): return chr(6)+chr(allowed_BPMs.index(bpm))
 # Some of the code below was taken from an old version of
 # Python Midi Package by Max M,
 # with much cutting-down and modifying
-from types import StringType
-from cStringIO import StringIO
 from struct import pack, unpack
 def getNibbles(byte): return (byte >> 4 & 0xF, byte & 0xF)
 def setNibbles(hiNibble, loNibble):
@@ -557,10 +572,6 @@ def to_n_bits(value, length=1, nbits=7):
     return bytes
 def toBytes(value):
     return unpack('%sB' % len(value), value)
-def fromBytes(value):
-    if not value:
-        return ''
-    return pack('%sB' % len(value), *value)
 NOTE_OFF = 0x80
 NOTE_ON = 0x90
 AFTERTOUCH = 0xA0
@@ -568,83 +579,12 @@ CONTINUOUS_CONTROLLER = 0xB0
 PATCH_CHANGE = 0xC0
 CHANNEL_PRESSURE = 0xD0
 PITCH_BEND = 0xE0
-BANK_SELECT = 0x00
-MODULATION_WHEEL = 0x01
-BREATH_CONTROLLER = 0x02
-FOOT_CONTROLLER = 0x04
-PORTAMENTO_TIME = 0x05
-DATA_ENTRY = 0x06
-CHANNEL_VOLUME = 0x07
-BALANCE = 0x08
-PAN = 0x0A
-EXPRESSION_CONTROLLER = 0x0B
-EFFECT_CONTROL_1 = 0x0C
-EFFECT_CONTROL_2 = 0x0D
-GEN_PURPOSE_CONTROLLER_1 = 0x10
-GEN_PURPOSE_CONTROLLER_2 = 0x11
-GEN_PURPOSE_CONTROLLER_3 = 0x12
-GEN_PURPOSE_CONTROLLER_4 = 0x13
-BANK_SELECT = 0x20
-MODULATION_WHEEL = 0x21
-BREATH_CONTROLLER = 0x22
-FOOT_CONTROLLER = 0x24
-PORTAMENTO_TIME = 0x25
-DATA_ENTRY = 0x26
-CHANNEL_VOLUME = 0x27
-BALANCE = 0x28
-PAN = 0x2A
-EXPRESSION_CONTROLLER = 0x2B
-EFFECT_CONTROL_1 = 0x2C
-EFFECT_CONTROL_2 = 0x2D
-GENERAL_PURPOSE_CONTROLLER_1 = 0x30
-GENERAL_PURPOSE_CONTROLLER_2 = 0x31
-GENERAL_PURPOSE_CONTROLLER_3 = 0x32
-GENERAL_PURPOSE_CONTROLLER_4 = 0x33
-SUSTAIN_ONOFF = 0x40
-PORTAMENTO_ONOFF = 0x41
-SOSTENUTO_ONOFF = 0x42
-SOFT_PEDAL_ONOFF = 0x43
-LEGATO_ONOFF = 0x44
-HOLD_2_ONOFF = 0x45
-SOUND_CONTROLLER_1 = 0x46
-SOUND_CONTROLLER_2 = 0x47
-SOUND_CONTROLLER_3 = 0x48
-SOUND_CONTROLLER_4 = 0x49
-SOUND_CONTROLLER_5 = 0x4A
-SOUND_CONTROLLER_7 = 0x4C
-SOUND_CONTROLLER_8 = 0x4D
-SOUND_CONTROLLER_9 = 0x4E
-SOUND_CONTROLLER_10 = 0x4F
-GENERAL_PURPOSE_CONTROLLER_5 = 0x50
-GENERAL_PURPOSE_CONTROLLER_6 = 0x51
-GENERAL_PURPOSE_CONTROLLER_7 = 0x52
-GENERAL_PURPOSE_CONTROLLER_8 = 0x53
-PORTAMENTO_CONTROL = 0x54
-EFFECTS_1 = 0x5B
-EFFECTS_2 = 0x5C
-EFFECTS_3 = 0x5D
-EFFECTS_4 = 0x5E
-EFFECTS_5 = 0x5F
-DATA_INCREMENT = 0x60
-DATA_DECREMENT = 0x61
-NON_REGISTERED_PARAMETER_NUMBER = 0x62
-NON_REGISTERED_PARAMETER_NUMBER = 0x63
-REGISTERED_PARAMETER_NUMBER = 0x64
-REGISTERED_PARAMETER_NUMBER = 0x65
-ALL_SOUND_OFF = 0x78
-RESET_ALL_CONTROLLERS = 0x79
-LOCAL_CONTROL_ONOFF = 0x7A
-ALL_NOTES_OFF = 0x7B
-OMNI_MODE_OFF = 0x7C
-OMNI_MODE_ON = 0x7D
-MONO_MODE_ON = 0x7E
-POLY_MODE_ON = 0x7F
 SYSTEM_EXCLUSIVE = 0xF0
 MTC = 0xF1
 SONG_POSITION_POINTER = 0xF2
 SONG_SELECT = 0xF3
 TUNING_REQUEST = 0xF6
-END_OFF_EXCLUSIVE = 0xF7
+END_OF_EXCLUSIVE = 0xF7
 SEQUENCE_NUMBER = 0x00
 TEXT            = 0x01
 COPYRIGHT       = 0x02
@@ -665,12 +605,6 @@ KEY_SIGNATURE   = 0x59
 SPECIFIC        = 0x7F
 FILE_HEADER     = 'MThd'
 TRACK_HEADER    = 'MTrk'
-TIMING_CLOCK   = 0xF8
-SONG_START     = 0xFA
-SONG_CONTINUE  = 0xFB
-SONG_STOP      = 0xFC
-ACTIVE_SENSING = 0xFE
-SYSTEM_RESET   = 0xFF
 META_EVENT     = 0xFF
 def is_status(byte):
     return (byte & 0x80) == 0x80
@@ -687,7 +621,7 @@ class MidiToBeep:
             d = {}
             for c,v in self.current_notes_on: d[v+self.semitonesAdd[c]]=1
             if self.need_to_interleave_tracks: self.tracks[-1].append([d.keys(),self._relative_time*self.microsecsPerDivision])
-            else: dedup_midi_note_chord(d.keys(),self._relative_time*self.microsecsPerDivision)
+            else: dedup_midi_note_chord(list(d.keys()),self._relative_time*self.microsecsPerDivision)
     def reset_time(self):
         self._relative_time = 0
         self._absolute_time = 0
@@ -745,7 +679,7 @@ class MidiToBeep:
                 minLen = min([t[0][1] for t in self.tracks])
                 d = {}
                 for t in self.tracks: d.update([(n,1) for n in t[0][0]])
-                dedup_midi_note_chord(d.keys(),minLen)
+                dedup_midi_note_chord(list(d.keys()),minLen)
                 for t in self.tracks:
                     t[0][1] -= minLen
                     if t[0][1]==0: del t[0]
@@ -772,28 +706,16 @@ class MidiToBeep:
     def midi_port(self, value): pass
     def tempo(self, value):
         # TODO if need_to_interleave_tracks, and tempo is not already put in on all tracks, and there's a tempo command that's not at the start and/or not on 1st track, we may need to do something
-        self.microsecsPerDivision = value/self.division
+        self.microsecsPerDivision = value*1.0/self.division
     def smtp_offset(self, hour, minute, second, frame, framePart): pass
     def time_signature(self, nn, dd, cc, bb): pass
     def key_signature(self, sf, mi): pass
     def sequencer_specific(self, data): pass
 
 class RawInstreamFile:
-    def __init__(self, infile=''):
-        if infile:
-            if isinstance(infile, StringType):
-                infile = open(infile, 'rb')
-                self.data = infile.read()
-                infile.close()
-            else:
-                self.data = infile.read()
-        else:
-            self.data = ''
+    def __init__(self, infile):
+        self.data = open(infile, 'rb').read()
         self.cursor = 0
-    def setData(self, data=''):
-        self.data = data
-    def setCursor(self, position=0):
-        self.cursor = position
     def getCursor(self):
         return self.cursor
     def moveCursor(self, relative_position=0):
@@ -862,7 +784,7 @@ class EventDispatcher:
             value = (hibyte<<7) + lobyte
             stream.pitch_bend(channel, value)
         else:
-            raise ValueError, 'Illegal channel message!'
+            raise ValueError('Illegal channel message!')
     def continuous_controllers(self, channel, controller, value):
         stream = self.outstream
         stream.continuous_controller(channel, controller, value)
@@ -940,8 +862,9 @@ class MidiFileParser:
     def parseMThdChunk(self):
         raw_in = self.raw_in
         header_chunk_type = raw_in.nextSlice(4)
+        if type("")==type(u""): header_chunk_type = header_chunk_type.decode('latin1')
+        if header_chunk_type != 'MThd': raise TypeError("It is not a valid midi file!")
         header_chunk_zise = raw_in.readBew(4)
-        if header_chunk_type != 'MThd': raise TypeError, "It is not a valid midi file!"
         self.format = raw_in.readBew(2)
         self.nTracks = raw_in.readBew(2)
         self.division = raw_in.readBew(2)
@@ -973,7 +896,7 @@ class MidiFileParser:
             elif status == SYSTEM_EXCLUSIVE:
                 sysex_length = raw_in.readVarLen()
                 sysex_data = raw_in.nextSlice(sysex_length-1)
-                if raw_in.readBew(move_cursor=0) == END_OFF_EXCLUSIVE:
+                if raw_in.readBew(move_cursor=0) == END_OF_EXCLUSIVE:
                     eo_sysex = raw_in.readBew()
                 dispatch.sysex_event(sysex_data)
             elif hi_nible == 0xF0:
@@ -1006,18 +929,16 @@ class MidiFileParser:
             self.parseMTrkChunk()
         self.dispatch.eof()
 class MidiInFile:
-    def __init__(self, outStream, infile=''):
+    def __init__(self, outStream, infile):
         self.raw_in = RawInstreamFile(infile)
         self.parser = MidiFileParser(self.raw_in, outStream)
     def read(self):
         p = self.parser
         p.parseMThdChunk()
         p.parseMTrkChunks()
-    def setData(self, data=''):
-        self.raw_in.setData(data)
 
 try: any
-except: # Python 2.3 (RISC OS?)
+except: # Python 2.3 (e.g. on RISC OS 4)
   def any(x):
     for i in x:
       if i: return True
@@ -1031,15 +952,17 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015-2020 Silas S. Brown.  License: GPL\n")
+sys.stderr.write(name+" (c) 2007-2010, 2015-2022 Silas S. Brown.  License: Apache 2\n")
 if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd\n") # (all BBC-Micro related)
+    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro\n") # (BBC Micro and RISC OS related)
     sys.exit(1)
+try: xrange
+except: xrange = range # Python 3
 for midiFile in sys.argv[1:]:
     init() ; dedup_chord,dedup_microsec = [],0
     dedup_microsec_error = 0
     sys.stderr.write("Parsing MIDI file "+midiFile+"\n")
-    MidiInFile(MidiToBeep(), open(midiFile,"rb")).read()
+    MidiInFile(MidiToBeep(), midiFile).read()
     dedup_midi_note_chord([],None) # ensure flushed
     if bbc_micro or bbc_micro==[]:
       if bbc_ssd:
@@ -1054,9 +977,11 @@ for midiFile in sys.argv[1:]:
     elif riscos_Maestro:
         add_midi_note_chord([],0)
         maestroFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","") + ',af1'
+        if on_riscos: maestroFile=maestroFile[:-4] # use SetType instead
         assert not maestroFile == midiFile
         sys.stderr.write("Writing Maestro file "+maestroFile+"... ")
         open(maestroFile,'wb').write(maestroData())
+        if on_riscos: os.system("SetType "+maestroFile+" af1")
         sys.stderr.write("Finished\n")
     elif not aplay:
         sys.stderr.write("Playing "+midiFile+"\n")
@@ -1128,4 +1053,4 @@ elif bbc_micro:
       # TODO: If user is pasting this in multiple chunks, and emulator adds a spurious newline at the beginning of each chunk (e.g. BeebEm 3 on Mac), AUTO start number needs decreasing (unless user makes sure not to include the newline at the end of each chunk if the emulator will add its own at the start of the next)
       elif len(bbc_micro) > 3277: bbc_micro.insert(0,"AU."+str(32768-len(bbc_micro))+",1") # (although if this is the case, program is extremely likely to exhaust the memory even in Bas128)
       else: bbc_micro.insert(0,"AU."+str(32770-10*len(bbc_micro)))
-    print "\n".join(bbc_micro)
+    print ("\n".join(bbc_micro))

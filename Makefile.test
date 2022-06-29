@@ -1,0 +1,21 @@
+# -*- mode: Makefile -*-
+test:
+	[ -e m1.mid ] || wget http://ssb22.user.srcf.net/clara/m1.mid
+	python2 midi-beeper.py --bbc m1.mid > m1-bbc-2
+	python3 midi-beeper.py --bbc m1.mid > m1-bbc-3
+	diff -u m1-bbc-2 m1-bbc-3
+	python2 midi-beeper.py --maestro m1.mid&&mv m1,af1 m1-maestro-2
+	python3 midi-beeper.py --maestro m1.mid&&mv m1,af1 m1-maestro-3
+	diff m1-maestro-2 m1-maestro-3
+	python2 midi-beeper.py --electron m1.mid > m1-electron-2
+	python3 midi-beeper.py --electron m1.mid > m1-electron-3
+	diff -u m1-electron-2 m1-electron-3
+	python2 midi-beeper.py --bbc-sdl m1.mid > m1-sdl-2
+	python3 midi-beeper.py --bbc-sdl m1.mid > m1-sdl-3
+	diff -u m1-sdl-2 m1-sdl-3
+	python2 midi-beeper.py --bbc-binary m1.mid > m1-binary-2
+	python3 midi-beeper.py --bbc-binary m1.mid > m1-binary-3
+	diff -u m1-binary-2 m1-binary-3
+	python2 midi-beeper.py --bbc-ssd m1.mid && mv tunes.ssd m1-2.ssd
+	python3 midi-beeper.py --bbc-ssd m1.mid && mv tunes.ssd m1-3.ssd
+	diff m1-2.ssd m1-3.ssd
