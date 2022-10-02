@@ -54,7 +54,7 @@ force_monophonic = 0  # set this to 1 to have only the top line (not normally ne
 # and https://gitlab.com/ssb22/midi-beeper.git
 # and https://bitbucket.org/ssb22/midi-beeper.git
 # and https://gitlab.developers.cam.ac.uk/ssb22/midi-beeper
-# and in China: git clone https://gitee.com/ssb22/midi-beeper
+# and in China: https://gitee.com/ssb22/midi-beeper
 # but some early versions are missing from these repositories
 
 # ----------------------------------------------------
