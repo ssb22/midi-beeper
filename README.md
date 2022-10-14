@@ -2,7 +2,7 @@
 MIDI Beeper from http://ssb22.user.srcf.net/mwrhome/midi-beeper.html
 (also mirrored at http://ssb22.gitlab.io/mwrhome/midi-beeper.html just in case)
 
-MIDI beeper is a Python 2 program to play MIDI files on Linux/BSD by beeping through the computer’s beeper instead of using proper sound circuits. If you try to play chords or polyphony, it will rapidly switch between alternate notes like an old office telephone. It sounds awful, but it might be useful when you really have to play a MIDI file but have no sound device attached. It should work on any machine that has the “beep” command (install “beep” package from your Linux/Unix package manager). It has been tested on a PC speaker and on an NSLU2’s internal speaker.
+MIDI beeper is a program to play MIDI files on Linux/BSD by beeping through the computer’s beeper instead of using proper sound circuits. If you try to play chords or polyphony, it will rapidly switch between alternate notes like an old office telephone. It sounds awful, but it might be useful when you really have to play a MIDI file but have no sound device attached. It should work on any machine that has the “beep” command (install “beep” package from your Linux/Unix package manager). It has been tested on a PC speaker and on an NSLU2’s internal speaker.
 
 On the NSLU2, playing music with beep works in Debian 4 (Etch, 2007) but not so well in Debian 5 (Lenny, 2012); you can try compiling this [modified beep.c](http://ssb22.user.srcf.net/mwrhome/beep.c) instead (remember the chmod 4755 mentioned in the man page). I haven’t tried it on more recent distros because my NSLU2 power supply failed and I upgraded to a Raspberry Pi.
 
