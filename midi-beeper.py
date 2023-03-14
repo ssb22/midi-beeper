@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.7, (c) 2007-2010,2015-2022 Silas S. Brown
+# Version 1.71, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -112,13 +112,13 @@ elif bbc_micro or acorn_electron:
                "N%=0:" # N% = next available envelope number (1-16 if not using BPUT#, otherwise 1-4 but we don't want to redefine envelopes that are already associated with notes in the buffer)
                "DIM c%(8)\n" # c% is the current value of each 'channel'; 252 i.e. 4*63 is used for silence.  Data read tells the program what changes to make to this array for the next chord and for how long to sound it (see add_midi_note_chord below).
                "FOR D%=0 TO 8:c%(D%)=252:N.\n" # all channels start with silence
-               # The next few lines can be abbreviated thus: "REP.:C%=0:REP.:READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.:U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3" (237 keystrokes, out of a limit of 238).  But Bas128 is still too slow, even with the read loop all on 1 line like this.
-               "REP.:C%=0\n" # C% is the write-index for our 'current chord' c%
-               "REP.:READ D%\n" # lowest 6 bits = semitone no. (which we multiply by 4 to get pitch number); highest 2 bits = array-pointer increment - 1 (so we can increment 1, 2 or 3 places; an "increment" of 4 means end of chord)
+               # The next few lines can be abbreviated thus: "REP.C%=0:REP.READD%:c%(C%)=(D%A.63)*4:I%=(D%DIV64)+1:C%=C%+I%:U.I%=4:READD%:REP.U.AD.-6>3:F.I%=0TO6S.3:S%=0:T%=0:IFc%(I%)=252:V%=0:EL.IFc%(I%+1)=252:V%=1:EL.S%=1:Q%=c%(I%+1)-c%(I%):IFc%(I%+2)=252:V%=2:EL.R%=c%(I%+2)-c%(I%+1):T%=1:V%=3" (234 keystrokes, out of a limit of 238).  But Bas128 is still too slow, even with the read loop all on 1 line like this.
+               "REP.C%=0\n" # C% is the write-index for our 'current chord' c%
+               "REP.READ D%\n" # lowest 6 bits = semitone no. (which we multiply by 4 to get pitch number); highest 2 bits = array-pointer increment - 1 (so we can increment 1, 2 or 3 places; an "increment" of 4 means end of chord)
                "c%(C%)=(D% AND 63)*4\n" # set pitch
                "I%=(D% DIV 64)+1:C%=C%+I%:U.I%=4\n" # c% array now all set
                "READ D%\n" # This will be the duration of the chord just specified
-               "REP.:U.ADVAL(-6)>3\n" # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.
+               "REP.U.ADVAL(-6)>3\n" # BBC Micro quirk: contrary to what the manual says (in at least some printings), the number of notes in each channel's "to be played" buffer before the program waits can be 5 not 4 (on at least some versions of the BBC).  This, together with the current note, means we might need a total of 6*3=18 envelopes, and we have only 16 slots.  Hence the ADVAL loop to avoid filling the buffer completely.
                "FOR I%=0 TO 6 STEP 3\n" # handling our 'channels' as triples, up to 3 being arpeggiated into one BBC Micro channel; I% will be the index-start of each triple
                "S%=0:" # will be set to 1 if the second section of the envelope is used
                "T%=0\n" # will be set to 1 if the third section of the envelope is used
@@ -154,12 +154,12 @@ elif bbc_micro or acorn_electron:
     bbc_micro=["""SO.1,0,0,0
 N%=0:DIM c%(2)
 FOR D%=0 TO 2:c%(D%)=252:N.
-REP.:C%=0
-REP.:READ D%
+REP.C%=0
+REP.READ D%
 c%(C%)=(D% AND 63)*4
 I%=(D% DIV 64)+1:C%=C%+I%:U.I%=4
 READ D%
-REP.:U.ADVAL(-6)>3
+REP.U.ADVAL(-6)>3
 S%=0:T%=0:P%=c%(0)
 IF P%=252:V%=0:ELSE V%=1:IF c%(1)<>252:S%=1:Q%=c%(1)-P%:IF c%(2)<>252:R%=c%(2)-c%(1):T%=1
 IF V%:N%=N%+1:IF N%=17:N%=1
@@ -327,7 +327,7 @@ def make_bbcMicro_DFS_image(datFiles):
   assert all(len(f)<=7 and re.match('^[A-Za-z0-9]*$',f) for f,_ in datFiles), "please keep DFS filenames to 7-char alphanumeric "+repr([f for f,_ in datFiles])
   if "BOOT_COPYRIGHT" in os.environ: data += "\rREM "+os.environ["BOOT_COPYRIGHT"]+"\r\r" # TODO: document this?
   if len(datFiles)==1: data += ('LOAD "%s"\rLIST\rRUN\r' % datFiles[0][0])
-  else: data += "*CAT\r"+"REP.:U.AD.-6=15:".join(('CH."%s"\r' % f) for f,_ in datFiles)
+  else: data += "*CAT\r"+"REP.U.AD.-6=15:".join(('CH."%s"\r' % f) for f,_ in datFiles)
   nextSector = 2+int((len(data)+255)/256)
   catNames[0]="!BOOT  $"
   catInfo[0]="".join([
@@ -1002,7 +1002,7 @@ elif bbc_micro:
       else: bbc_micro.insert(1,"P%=TOP")
       bbc_offset = 0 ; i = 2
       if use_input_loop:
-        bbc_micro.insert(i,'REP.:I.A$:IF LEN(A$):F.A%=1TO193STEP8:!P%=EVAL("&"+MID$(A$,A%,8)):P%=P%+4:N.:U.RIGHT$(A$,1)="*":EL.:U.0') ; i += 1 # horrible mix of if/else and repeat/until on 1 line in immediate mode so it copes with any extra blank lines that buggy emulators might insert
+        bbc_micro.insert(i,'REP.I.A$:IF LEN(A$):F.A%=1TO193STEP8:!P%=EVAL("&"+MID$(A$,A%,8)):P%=P%+4:N.:U.RIGHT$(A$,1)="*":EL.:U.0') ; i += 1 # horrible mix of if/else and repeat/until on 1 line in immediate mode so it copes with any extra blank lines that buggy emulators might insert
         while i < len(bbc_micro)-100:
           buf = []
           for j in range(i,i+100): buf.append("%02X" % bbc_micro[j])
