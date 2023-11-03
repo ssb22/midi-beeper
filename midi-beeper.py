@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.71, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.72, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -37,6 +37,8 @@ bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
+
+maxTime = 0 # set to number of seconds (or set maxTime environment variable) to limit length of playback, 0 = unlimited
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -608,33 +610,27 @@ TRACK_HEADER    = 'MTrk'
 META_EVENT     = 0xFF
 def is_status(byte):
     return (byte & 0x80) == 0x80
+maxMicrosecs = float(os.environ.get("maxTime",maxTime))*1e6
 class MidiToBeep:
-    def update_time(self, new_time=0, relative=1):
-        if relative:
-            self._relative_time = new_time
-            self._absolute_time += new_time
-        else:
-            self._relative_time = new_time - self._absolute_time
-            self._absolute_time = new_time
-        if self._relative_time:
+    def update_time(self,divisions=0,relative=1):
+        oldDivs = self.divisionCount
+        if relative: self.divisionCount += divisions
+        else: self.divisionCount = divisions
+        newMicrosecs = self.microsecs + (self.divisionCount-oldDivs)*self.microsecsPerDivision
+        if maxMicrosecs: newMicrosecs = min(newMicrosecs, maxMicrosecs)
+        microsecsSeen = newMicrosecs - self.microsecs
+        self.microsecs = newMicrosecs
+        if microsecsSeen:
             # time was advanced, so output something
             d = {}
             for c,v in self.current_notes_on: d[v+self.semitonesAdd[c]]=1
-            if self.need_to_interleave_tracks: self.tracks[-1].append([d.keys(),self._relative_time*self.microsecsPerDivision])
-            else: dedup_midi_note_chord(list(d.keys()),self._relative_time*self.microsecsPerDivision)
+            if self.need_to_interleave_tracks: self.tracks[-1].append([d.keys(),microsecsSeen])
+            else: dedup_midi_note_chord(list(d.keys()),microsecsSeen)
     def reset_time(self):
-        self._relative_time = 0
-        self._absolute_time = 0
-    def rel_time(self): return self._relative_time
-    def abs_time(self): return self._absolute_time
-    def reset_run_stat(self): self._running_status = None
-    def set_run_stat(self, new_status): self._running_status = new_status
-    def get_run_stat(self): return self._running_status
+        self.divisionCount = self.microsecs = 0
     def set_current_track(self, new_track): self._current_track = new_track
-    def get_current_track(self): return self._current_track
     def __init__(self):
-        self._absolute_time = 0
-        self._relative_time = 0
+        self.divisionCount = self.microsecs = 0
         self._current_track = 0
         self._running_status = None
         self.current_notes_on = []
@@ -748,8 +744,8 @@ class EventDispatcher:
         self.outstream.sysex_event(data)
     def eof(self):
         self.outstream.eof()
-    def update_time(self, new_time=0, relative=1):
-        self.outstream.update_time(new_time, relative)
+    def update_time(self, time=0, relative=1):
+        self.outstream.update_time(time, relative)
     def reset_time(self):
         self.outstream.reset_time()
     def channel_messages(self, hi_nible, channel, data):
