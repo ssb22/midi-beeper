@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.72, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.73, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -16,7 +16,7 @@
 # Can also play MIDI files using square-wave synthesis with aplay
 # (e.g. on Raspberry Pi) - set aplay below if you want this instead.
 # Set it to a volume level, e.g. aplay = 100
-aplay = 0
+aplay = 0 # or set APLAY_VOL environment
 
 # Can also convert MIDI files to RISC OS Maestro music files
 # for playing (but not typesetting well) on 'vanilla' RISC OS.
@@ -62,6 +62,7 @@ maxTime = 0 # set to number of seconds (or set maxTime environment variable) to 
 # ----------------------------------------------------
 
 import os,sys
+if sys.version_info < (2,2): sys.stderr.write("Warning: Not tested on Python 2.1 and earlier\nYou might need to introduce long() in various places\nto avoid overflow after 35 minutes\n\n") # due to microseconds count (if you really want to listen to beeped MIDI that long)
 def delArg(a):
   found = a in sys.argv
   if found: sys.argv.remove(a)
@@ -76,7 +77,10 @@ assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with b
 
 on_riscos = sys.platform.lower().find("riscos")>=0
 if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
+elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
+if riscos_Maestro or bbc_micro or acorn_electron: aplay = 0
 
+# To add a new type of beeper, get the following 'if' block to do any necessary setup and to define the appropriate version of add_midi_note_chord()
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
   o = os.popen("aplay -q -t raw -c 1 -f U8 -r %d" % rate,"w")
@@ -102,7 +106,7 @@ if aplay:
             next[i] = -next[i]
             counts[i] += 1
             nextFlips[i] = int(counts[i]*halfPeriods[i]) # necessary especially at low rates as periods are rarely integers
-        o.write(bchr(val)) ; t += 1
+        o.write(bchr(int(val))) ; t += 1
   def add_midi_note_chord(noteNos,microsecs):
     chord(list(map(to_freq,noteNos)),microsecs / 1000)
 elif bbc_micro or acorn_electron:
@@ -301,7 +305,7 @@ else: # beep
     elif len(freqList)==1: return " -n -f %d -l %d" % (freqList[0],millisecs) # one note
     else:
         pulseLength = max(min(millisecs/len(freqList)/repetitions_to_aim_for,max_pulseLength),min_pulseLength)
-        return (" -D 0".join([chord([f],pulseLength) for f in freqList]))*max(1,millisecs/pulseLength/len(freqList)) # (max with 1 means at least 1 repetition - prefer a slight slow-down to missing a chord out)
+        return (" -D 0".join([chord([f],pulseLength) for f in freqList]))*max(1,int(millisecs/pulseLength/len(freqList))) # (max with 1 means at least 1 repetition - prefer a slight slow-down to missing a chord out)
     # (the above -D 0 is necessary because Debian 5's beep adds a default delay otherwise)
 
   command_line_len = 80000 # reduce this if you get "argument list too long" (NB the real limit is slightly more than this value)
@@ -548,68 +552,8 @@ def setBPM_block(bpm): return chr(6)+chr(allowed_BPMs.index(bpm))
 # Python Midi Package by Max M,
 # with much cutting-down and modifying
 from struct import pack, unpack
-def getNibbles(byte): return (byte >> 4 & 0xF, byte & 0xF)
-def setNibbles(hiNibble, loNibble):
-    return (hiNibble << 4) + loNibble
-def readBew(value):
-    return unpack('>%s' % {1:'B', 2:'H', 4:'L'}[len(value)], value)[0]
-def readVar(value):
-    sum = 0
-    for byte in unpack('%sB' % len(value), value):
-        sum = (sum << 7) + (byte & 0x7F)
-        if not 0x80 & byte: break
-    return sum
-def varLen(value):
-    if value <= 127:
-        return 1
-    elif value <= 16383:
-        return 2
-    elif value <= 2097151:
-        return 3
-    else:
-        return 4
-def to_n_bits(value, length=1, nbits=7):
-    bytes = [(value >> (i*nbits)) & 0x7F for i in range(length)]
-    bytes.reverse()
-    return bytes
 def toBytes(value):
     return unpack('%sB' % len(value), value)
-NOTE_OFF = 0x80
-NOTE_ON = 0x90
-AFTERTOUCH = 0xA0
-CONTINUOUS_CONTROLLER = 0xB0
-PATCH_CHANGE = 0xC0
-CHANNEL_PRESSURE = 0xD0
-PITCH_BEND = 0xE0
-SYSTEM_EXCLUSIVE = 0xF0
-MTC = 0xF1
-SONG_POSITION_POINTER = 0xF2
-SONG_SELECT = 0xF3
-TUNING_REQUEST = 0xF6
-END_OF_EXCLUSIVE = 0xF7
-SEQUENCE_NUMBER = 0x00
-TEXT            = 0x01
-COPYRIGHT       = 0x02
-SEQUENCE_NAME   = 0x03
-INSTRUMENT_NAME = 0x04
-LYRIC           = 0x05
-MARKER          = 0x06
-CUEPOINT        = 0x07
-PROGRAM_NAME    = 0x08
-DEVICE_NAME     = 0x09
-MIDI_CH_PREFIX  = 0x20
-MIDI_PORT       = 0x21
-END_OF_TRACK    = 0x2F
-TEMPO           = 0x51
-SMTP_OFFSET     = 0x54
-TIME_SIGNATURE  = 0x58
-KEY_SIGNATURE   = 0x59
-SPECIFIC        = 0x7F
-FILE_HEADER     = 'MThd'
-TRACK_HEADER    = 'MTrk'
-META_EVENT     = 0xFF
-def is_status(byte):
-    return (byte & 0x80) == 0x80
 maxMicrosecs = float(os.environ.get("maxTime",maxTime))*1e6
 class MidiToBeep:
     def update_time(self,divisions=0,relative=1):
@@ -639,29 +583,21 @@ class MidiToBeep:
         self.semitoneRange = [1]*16
         self.semitonesAdd = [0]*16
         self.microsecsPerDivision = 10000
-    def note_on(self, channel=0, note=0x40, velocity=0x40):
-        if velocity and not channel==9: self.current_notes_on.append((channel,note))
-    def note_off(self, channel=0, note=0x40, velocity=0x40):
+    def note_on(self,channel,note):
+        if not channel==9: self.current_notes_on.append((channel,note))
+    def note_off(self,channel,note):
         try: self.current_notes_on.remove((channel,note))
         except ValueError: pass
-    def aftertouch(self, channel=0, note=0x40, velocity=0x40): pass
     def continuous_controller(self, channel, controller, value):
         # Interpret "pitch bend range":
         if controller==64: self.rpnLsb[channel] = value
         elif controller==65: self.rpnMsb[channel] = value
         elif controller==6 and self.rpnLsb[channel]==self.rpnMsb[channel]==0:
             self.semitoneRange[channel]=value
-    def patch_change(self, channel, patch): pass
-    def channel_pressure(self, channel, pressure): pass
     def pitch_bend(self, channel, value):
         # Pitch bend is sometimes used for slurs
         # so we'd better interpret it (only MSB for now; full range is over 8192)
         self.semitonesAdd[channel] = (value-64)*self.semitoneRange[channel]/64.0
-    def sysex_event(self, data): pass
-    def midi_time_code(self, msg_type, values): pass
-    def song_position_pointer(self, value): pass
-    def song_select(self, songNumber): pass
-    def tuning_request(self): pass
     def header(self, format=0, nTracks=1, division=96):
         self.division=division
         self.need_to_interleave_tracks = (format==1)
@@ -682,31 +618,13 @@ class MidiToBeep:
                 while True: # delete empty tracks
                     try: self.tracks.remove([])
                     except ValueError: break
-    def meta_event(self, meta_type, data): pass
     def start_of_track(self, n_track=0):
         self.reset_time()
         self._current_track += 1
         if self.need_to_interleave_tracks: self.tracks.append([])
-    def end_of_track(self): pass
-    def sequence_number(self, value): pass
-    def text(self, text): pass
-    def copyright(self, text): pass
-    def sequence_name(self, text): pass
-    def instrument_name(self, text): pass
-    def lyric(self, text): pass
-    def marker(self, text): pass
-    def cuepoint(self, text): pass
-    def program_name(self,progname): pass
-    def device_name(self,devicename): pass
-    def midi_ch_prefix(self, channel): pass
-    def midi_port(self, value): pass
     def tempo(self, value):
         # TODO if need_to_interleave_tracks, and tempo is not already put in on all tracks, and there's a tempo command that's not at the start and/or not on 1st track, we may need to do something
         self.microsecsPerDivision = value*1.0/self.division
-    def smtp_offset(self, hour, minute, second, frame, framePart): pass
-    def time_signature(self, nn, dd, cc, bb): pass
-    def key_signature(self, sf, mi): pass
-    def sequencer_specific(self, data): pass
 
 class RawInstreamFile:
     def __init__(self, infile):
@@ -723,133 +641,51 @@ class RawInstreamFile:
             self.moveCursor(length)
         return slc
     def readBew(self, n_bytes=1, move_cursor=1):
-        return readBew(self.nextSlice(n_bytes, move_cursor))
+        value = self.nextSlice(n_bytes, move_cursor)
+        return unpack('>%s' % {1:'B', 2:'H', 4:'L'}[len(value)], value)[0]
     def readVarLen(self):
-        MAX_VARLEN = 4
-        var = readVar(self.nextSlice(MAX_VARLEN, 0))
-        self.moveCursor(varLen(var))
+        var, value = 0, self.nextSlice(4, 0)
+        for byte in unpack('%sB' % len(value), value):
+            self.moveCursor(1)
+            var = (var << 7) + (byte & 0x7F)
+            if not 0x80 & byte: break
         return var
 class EventDispatcher:
     def __init__(self, outstream):
         self.outstream = outstream
-        self.convert_zero_velocity = 1
-        self.dispatch_continuos_controllers = 1
-        self.dispatch_meta_events = 1
     def header(self, format, nTracks, division):
         self.outstream.header(format, nTracks, division)
     def start_of_track(self, current_track):
         self.outstream.set_current_track(current_track)
         self.outstream.start_of_track(current_track)
-    def sysex_event(self, data):
-        self.outstream.sysex_event(data)
     def eof(self):
         self.outstream.eof()
     def update_time(self, time=0, relative=1):
         self.outstream.update_time(time, relative)
     def reset_time(self):
         self.outstream.reset_time()
-    def channel_messages(self, hi_nible, channel, data):
+    def channel_messages(self, high_nibble, channel, data):
         stream = self.outstream
         data = toBytes(data)
-        if (NOTE_ON & 0xF0) == hi_nible:
+        if high_nibble==0x90: # note on
             note, velocity = data
-            if velocity==0 and self.convert_zero_velocity:
-                stream.note_off(channel, note, 0x40)
-            else:
-                stream.note_on(channel, note, velocity)
-        elif (NOTE_OFF & 0xF0) == hi_nible:
+            if velocity==0: stream.note_off(channel,note)
+            else: stream.note_on(channel,note)
+        elif high_nibble == 0x80: # note off
             note, velocity = data
-            stream.note_off(channel, note, velocity)
-        elif (AFTERTOUCH & 0xF0) == hi_nible:
-            note, velocity = data
-            stream.aftertouch(channel, note, velocity)
-        elif (CONTINUOUS_CONTROLLER & 0xF0) == hi_nible:
+            stream.note_off(channel,note)
+        elif high_nibble == 0xB0: # continuous controller
             controller, value = data
-            if self.dispatch_continuos_controllers:
-                self.continuous_controllers(channel, controller, value)
-            else:
-                stream.continuous_controller(channel, controller, value)
-        elif (PATCH_CHANGE & 0xF0) == hi_nible:
-            program = data[0]
-            stream.patch_change(channel, program)
-        elif (CHANNEL_PRESSURE & 0xF0) == hi_nible:
-            pressure = data[0]
-            stream.channel_pressure(channel, pressure)
-        elif (PITCH_BEND & 0xF0) == hi_nible:
+            stream.continuous_controller(channel, controller, value)
+        elif high_nibble == 0xE0: # pitch bend
             hibyte, lobyte = data
             value = (hibyte<<7) + lobyte
             stream.pitch_bend(channel, value)
-        else:
-            raise ValueError('Illegal channel message!')
-    def continuous_controllers(self, channel, controller, value):
-        stream = self.outstream
-        stream.continuous_controller(channel, controller, value)
-    def system_commons(self, common_type, common_data):
-        stream = self.outstream
-        if common_type == MTC:
-            data = readBew(common_data)
-            msg_type = (data & 0x07) >> 4
-            values = (data & 0x0F)
-            stream.midi_time_code(msg_type, values)
-        elif common_type == SONG_POSITION_POINTER:
-            hibyte, lobyte = toBytes(common_data)
-            value = (hibyte<<7) + lobyte
-            stream.song_position_pointer(value)
-        elif common_type == SONG_SELECT:
-            data = readBew(common_data)
-            stream.song_select(data)
-        elif common_type == TUNING_REQUEST:
-            stream.tuning_request(time=None)
     def meta_events(self, meta_type, data):
         stream = self.outstream
-        if meta_type == SEQUENCE_NUMBER:
-            number = readBew(data)
-            stream.sequence_number(number)
-        elif meta_type == TEXT:
-            stream.text(data)
-        elif meta_type == COPYRIGHT:
-            stream.copyright(data)
-        elif meta_type == SEQUENCE_NAME:
-            stream.sequence_name(data)
-        elif meta_type == INSTRUMENT_NAME:
-            stream.instrument_name(data)
-        elif meta_type == LYRIC:
-            stream.lyric(data)
-        elif meta_type == MARKER:
-            stream.marker(data)
-        elif meta_type == CUEPOINT:
-            stream.cuepoint(data)
-        elif meta_type == PROGRAM_NAME:
-            stream.program_name(data)
-        elif meta_type == DEVICE_NAME:
-            stream.device_name(data)
-        elif meta_type == MIDI_CH_PREFIX:
-            channel = readBew(data)
-            stream.midi_ch_prefix(channel)
-        elif meta_type == MIDI_PORT:
-            port = readBew(data)
-            stream.midi_port(port)
-        elif meta_type == END_OF_TRACK:
-            stream.end_of_track()
-        elif meta_type == TEMPO:
+        if meta_type == 0x51: # tempo
             b1, b2, b3 = toBytes(data)
             stream.tempo((b1<<16) + (b2<<8) + b3)
-        elif meta_type == SMTP_OFFSET:
-            hour, minute, second, frame, framePart = toBytes(data)
-            stream.smtp_offset(
-                    hour, minute, second, frame, framePart)
-        elif meta_type == TIME_SIGNATURE:
-            nn, dd, cc, bb = toBytes(data)
-            stream.time_signature(nn, dd, cc, bb)
-        elif meta_type == KEY_SIGNATURE:
-            sf, mi = toBytes(data)
-            stream.key_signature(sf, mi)
-        elif meta_type == SPECIFIC:
-            meta_data = toBytes(data)
-            stream.sequencer_specific(meta_data)
-        else:
-            meta_data = toBytes(data)
-            stream.meta_event(meta_type, meta_data)
 class MidiFileParser:
     def __init__(self, raw_in, outstream):
         self.raw_in = raw_in
@@ -883,41 +719,24 @@ class MidiFileParser:
                 status = self._running_status = raw_in.readBew()
             else:
                 status = self._running_status
-            hi_nible, lo_nible = status & 0xF0, status & 0x0F
-            if status == META_EVENT:
+            high_nibble, low_nibble = status & 0xF0, status & 0x0F
+            if status == 0xFF: # meta event
                 meta_type = raw_in.readBew()
                 meta_length = raw_in.readVarLen()
                 meta_data = raw_in.nextSlice(meta_length)
                 dispatch.meta_events(meta_type, meta_data)
-            elif status == SYSTEM_EXCLUSIVE:
-                sysex_length = raw_in.readVarLen()
-                sysex_data = raw_in.nextSlice(sysex_length-1)
-                if raw_in.readBew(move_cursor=0) == END_OF_EXCLUSIVE:
-                    eo_sysex = raw_in.readBew()
-                dispatch.sysex_event(sysex_data)
-            elif hi_nible == 0xF0:
-                data_sizes = {
-                    MTC:1,
-                    SONG_POSITION_POINTER:2,
-                    SONG_SELECT:1,
-                }
-                data_size = data_sizes.get(hi_nible, 0)
-                common_data = raw_in.nextSlice(data_size)
-                common_type = lo_nible
-                dispatch.system_common(common_type, common_data)
+            elif status == 0xF0: # system exclusive
+                raw_in.nextSlice(raw_in.readVarLen()-1)
+                if raw_in.readBew(move_cursor=0) == 0xF7:
+                    raw_in.readBew()
+            elif high_nibble == 0xF0:
+                data_size = { 0xF1:1, 0xF2:2, 0xF3:1 }.get(status, 0)
+                raw_in.nextSlice(data_size)
             else:
-                data_sizes = {
-                    PATCH_CHANGE:1,
-                    CHANNEL_PRESSURE:1,
-                    NOTE_OFF:2,
-                    NOTE_ON:2,
-                    AFTERTOUCH:2,
-                    CONTINUOUS_CONTROLLER:2,
-                    PITCH_BEND:2,
-                }
-                data_size = data_sizes.get(hi_nible, 0)
+                if high_nibble==0xC0 or high_nibble==0xD0: data_size = 1
+                else: data_size = 2
                 channel_data = raw_in.nextSlice(data_size)
-                event_type, channel = hi_nible, lo_nible
+                event_type, channel = high_nibble, low_nibble
                 dispatch.channel_messages(event_type, channel, channel_data)
     def parseMTrkChunks(self):
         for t in range(self.nTracks):
