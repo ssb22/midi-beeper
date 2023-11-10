@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.73, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.74, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -13,10 +13,13 @@
 # "beep" Linux package, including NSLU2 network storage devices.
 # (On NSLU2 do 'sudo modprobe isp4xx_beeper' before running)
 
+# Can also install a MIDI file into the GNU GRUB bootloader (sudo access required; does not work on all machines e.g. some laptops have no beeper)
+grub = 0 # or run with --grub
+
 # Can also play MIDI files using square-wave synthesis with aplay
 # (e.g. on Raspberry Pi) - set aplay below if you want this instead.
 # Set it to a volume level, e.g. aplay = 100
-aplay = 0 # or set APLAY_VOL environment
+aplay = 0 # or set APLAY_VOL environment variable
 
 # Can also convert MIDI files to RISC OS Maestro music files
 # for playing (but not typesetting well) on 'vanilla' RISC OS.
@@ -62,6 +65,7 @@ maxTime = 0 # set to number of seconds (or set maxTime environment variable) to 
 # ----------------------------------------------------
 
 import os,sys
+from struct import pack, unpack
 if sys.version_info < (2,2): sys.stderr.write("Warning: Not tested on Python 2.1 and earlier\nYou might need to introduce long() in various places\nto avoid overflow after 35 minutes\n\n") # due to microseconds count (if you really want to listen to beeped MIDI that long)
 def delArg(a):
   found = a in sys.argv
@@ -73,14 +77,15 @@ if delArg('--electron'): acorn_electron = 1
 if delArg('--bbc-binary'): bbc_binary=bbc_micro=1
 if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
 if delArg('--bbc-sdl'): bbc_sdl=bbc_micro=1
+if delArg('--grub'): grub=1
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 on_riscos = sys.platform.lower().find("riscos")>=0
 if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
 elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
-if riscos_Maestro or bbc_micro or acorn_electron: aplay = 0
+if riscos_Maestro or bbc_micro or acorn_electron or grub: aplay = 0
 
-# To add a new type of beeper, get the following 'if' block to do any necessary setup and to define the appropriate version of add_midi_note_chord()
+# To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
   o = os.popen("aplay -q -t raw -c 1 -f U8 -r %d" % rate,"w")
@@ -284,6 +289,26 @@ elif riscos_Maestro:
   def init():
     global current_chord,current_time,riscos_channels
     current_chord = [] ; current_time = 0 ; riscos_channels = [[],[],[],[],[],[],[],[]]
+elif grub:
+  pulselength_milliseconds = 10
+  bpm = int(60000/pulselength_milliseconds)
+  assert pulselength_milliseconds == int(60000/bpm), "rounding error with this pulselength"
+  if os.path.exists('/boot/grub2'): grub="grub2" # Red Hat etc
+  elif os.path.exists('/boot/grub'): grub="grub" # Debian
+  else: raise Exception("Can't find GRUB on this system")
+  grub_out = os.popen("sudo bash -c '(grep -v ^GRUB_INIT_TUNE < /etc/default/grub;echo GRUB_INIT_TUNE=\\\"/boot/"+grub+"/tune\\\")>/etc/default/grub0;mv /etc/default/grub0 /etc/default/grub;cat > /boot/"+grub+"/tune;if [ -e /boot/efi/EFI/redhat/grub.cfg ]; then grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg; else "+grub+"-mkconfig -o /boot/"+grub+"/grub.cfg; fi'","w")
+  try: gWrap,grub_out = grub_out,grub_out.buffer # Python 3
+  except AttributeError: pass # Python 2
+  grub_out.write(pack('<I',bpm))
+  def init(): pass
+  def add_midi_note_chord(noteNos,microsecs):
+    millisecs = microsecs / 1000
+    freqs = list(map(to_freq,noteNos))
+    if not freqs: freqs = [0]
+    if len(freqs)==1: grub_out.write(pack('<HH',int(freqs[0]),int(millisecs/pulselength_milliseconds)))
+    else:
+      for _ in xrange(max(1,int(millisecs/(len(freqs)*pulselength_milliseconds)))):
+        for f in freqs: grub_out.write(pack('<HH',int(f),1))
 else: # beep
   # NSLU2 hack:
   try: event=open("/proc/bus/input/devices").read()
@@ -551,7 +576,6 @@ def setBPM_block(bpm): return chr(6)+chr(allowed_BPMs.index(bpm))
 # Some of the code below was taken from an old version of
 # Python Midi Package by Max M,
 # with much cutting-down and modifying
-from struct import pack, unpack
 def toBytes(value):
     return unpack('%sB' % len(value), value)
 maxMicrosecs = float(os.environ.get("maxTime",maxTime))*1e6
@@ -767,7 +791,7 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015-2022 Silas S. Brown.  License: Apache 2\n")
+sys.stderr.write(name+" (c) 2007-2010, 2015-2023 Silas S. Brown.  License: Apache 2\n")
 if len(sys.argv)<2:
     sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro\n") # (BBC Micro and RISC OS related)
     sys.exit(1)
@@ -798,7 +822,7 @@ for midiFile in sys.argv[1:]:
         open(maestroFile,'wb').write(maestroData())
         if on_riscos: os.system("SetType "+maestroFile+" af1")
         sys.stderr.write("Finished\n")
-    elif not aplay:
+    elif not aplay and not grub:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
 if bbc_ssd and bbc_files:
