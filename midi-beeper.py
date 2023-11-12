@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.74, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.75, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -38,6 +38,9 @@ bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.
 
 # HiBasic (Tube) support (~30k for programs) fully works
 # Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
+
+# Can also convert a MIDI file to DOS QBASIC code
+qbasic = 0 # or run with --qbasic
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -78,12 +81,13 @@ if delArg('--bbc-binary'): bbc_binary=bbc_micro=1
 if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
 if delArg('--bbc-sdl'): bbc_sdl=bbc_micro=1
 if delArg('--grub'): grub=1
+if delArg('--qbasic'): qbasic=1
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 on_riscos = sys.platform.lower().find("riscos")>=0
 if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
 elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
-if riscos_Maestro or bbc_micro or acorn_electron or grub: aplay = 0
+if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic: aplay = 0
 
 # To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end
 if aplay:
@@ -289,6 +293,23 @@ elif riscos_Maestro:
   def init():
     global current_chord,current_time,riscos_channels
     current_chord = [] ; current_time = 0 ; riscos_channels = [[],[],[],[],[],[],[],[]]
+elif qbasic:
+  def init():
+    global basData, dedup_microsec_quantise
+    basData = [b'PLAY "T255L64ML"']
+    dedup_microsec_quantise = 60000000/255/(64/4)
+    basData+=[b"DO",b"READ p$,r",b'IF p$ <> "@" THEN',b"FOR i=1 TO r",b"PLAY p$",b"NEXT i",b"END IF",b'LOOP UNTIL p$="@"']
+  def add_midi_note_chord(noteNos,microsecs):
+    notes = []
+    for n in noteNos:
+      n -= 23
+      while n < 1: n += 12
+      while n > 84: n -= 12
+      notes.append(b"N%d" % n)
+    if not notes: notes=[b"N0"]
+    notes = b"%s,%d" % (b"".join(notes),max(1,int(microsecs/dedup_microsec_quantise/len(notes))))
+    if basData and basData[-1].startswith(b"DATA ") and len(basData[-1])+len(notes) < 80: basData[-1] += b","+notes
+    else: basData.append(b"DATA "+notes)
 elif grub:
   pulselength_milliseconds = 10
   bpm = int(60000/pulselength_milliseconds)
@@ -300,7 +321,9 @@ elif grub:
   try: gWrap,grub_out = grub_out,grub_out.buffer # Python 3
   except AttributeError: pass # Python 2
   grub_out.write(pack('<I',bpm))
-  def init(): pass
+  def init():
+    global dedup_microsec_quantise
+    dedup_microsec_quantise = 1000*int(1000/pulselength_milliseconds)
   def add_midi_note_chord(noteNos,microsecs):
     millisecs = microsecs / 1000
     freqs = list(map(to_freq,noteNos))
@@ -401,7 +424,7 @@ if type("")==type(u""): # Python 3
   def make_bbcMicro_DFS_image(datFiles):
     return real_make_bbcMicro_DFS_image(datFiles).encode('latin1')
 
-dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro; TODO: default 'beep' cmd also?)
+dedup_microsec_quantise = 0 # for handling 'rolls' etc (currently used by bbc_micro, qbasic, grub; TODO: default 'beep' cmd also? but would need to interact with its variable pulse length)
 def dedup_midi_note_chord(noteNos,microsecs):
   if force_monophonic and noteNos: noteNos=[max(noteNos)]
   else: noteNos.sort()
@@ -409,7 +432,9 @@ def dedup_midi_note_chord(noteNos,microsecs):
   if dedup_microsec_quantise and not microsecs==None:
     global dedup_microsec_error
     microsecs += dedup_microsec_error ; oldM = microsecs
-    microsecs = int((microsecs+dedup_microsec_quantise/2)/dedup_microsec_quantise) * dedup_microsec_quantise
+    quantiseTo = dedup_microsec_quantise
+    if (qbasic or grub) and noteNos: quantiseTo *= len(noteNos)
+    microsecs = int((microsecs+quantiseTo/2)/quantiseTo) * quantiseTo
     dedup_microsec_error = oldM - microsecs
   if noteNos == dedup_chord and microsecs:
     # it's just an extention of the existing one
@@ -793,7 +818,7 @@ elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
 sys.stderr.write(name+" (c) 2007-2010, 2015-2023 Silas S. Brown.  License: Apache 2\n")
 if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro\n") # (BBC Micro and RISC OS related)
+    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro | --grub | --qbasic\n")
     sys.exit(1)
 try: xrange
 except: xrange = range # Python 3
@@ -822,6 +847,10 @@ for midiFile in sys.argv[1:]:
         open(maestroFile,'wb').write(maestroData())
         if on_riscos: os.system("SetType "+maestroFile+" af1")
         sys.stderr.write("Finished\n")
+    elif qbasic:
+        basFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","")+os.extsep+"bas"
+        open(basFile,'wb').write(b'\n'.join(basData+[b'DATA @,0\n']))
+        sys.stderr.write("Wrote "+basFile+"\n")
     elif not aplay and not grub:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
