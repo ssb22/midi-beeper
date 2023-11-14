@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.75, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.76, (c) 2007-2010,2015-2023 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -89,7 +89,7 @@ if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
 elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
 if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic: aplay = 0
 
-# To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end
+# To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end, and quantiseTo logic
 if aplay:
   rate = 8000 # can just about manage 3 or 4 channels on a Raspberry Pi if it isn't doing anything else
   o = os.popen("aplay -q -t raw -c 1 -f U8 -r %d" % rate,"w")
@@ -262,7 +262,7 @@ elif riscos_Maestro:
       else: # stop that note:
         assert n.noteNo not in noteNos # shouldn't have any duplicates in that list
         n.end(current_time)
-        n.quantiseTo(hemi_microsecs)
+        n.quantTo(hemi_microsecs)
         foundC = False
         for i in [0,4,6,2,1,3,5,7]: # allocate channels in that order so 2-stave (0-3,4-6/7), 3-stave (0,1-4,5-6/7) and 4-stave (0-1,2-3,4-5,6/7) views work vaguely sensibly
             c = riscos_channels[i]
@@ -270,7 +270,7 @@ elif riscos_Maestro:
                 c.append(n) ; foundC = True ; break
         if not foundC: sys.stderr.write("Insufficient RISC OS channels: dropping note %d\n" % n.noteNo)
         current_chord.remove(n)
-    for noteNo in noteNos: current_chord.append(MidiNote(noteNo,current_time)) # newly-started notes
+    for noteNo in noteNos: current_chord.append(MaestroMidiNote(noteNo,current_time)) # newly-started notes
     current_time += microsecs
   def maestroData():
     queues = []
@@ -296,9 +296,9 @@ elif riscos_Maestro:
 elif qbasic:
   def init():
     global basData, dedup_microsec_quantise
-    basData = [b'PLAY "T255L64ML"']
+    basData = [b'PLAY "T255L64MLMB"']
     dedup_microsec_quantise = 60000000/255/(64/4)
-    basData+=[b"DO",b"READ p$,r",b'IF p$ <> "@" THEN',b"FOR i=1 TO r",b"PLAY p$",b"NEXT i",b"END IF",b'LOOP UNTIL p$="@"']
+    basData+=[b'ON PLAY(1) GOSUB playTune\nr=0:PLAY ON:GOSUB playTune\nPRINT "Press any key to stop"\nDO: LOOP UNTIL INKEY$ <> ""\nEND\nplayTune:\nIF r<=0 THEN READ p$,r\nIF p$ = "@" THEN END\nPLAY p$\nr = r - 1\nRETURN']
   def add_midi_note_chord(noteNos,microsecs):
     notes = []
     for n in noteNos:
@@ -308,7 +308,7 @@ elif qbasic:
       notes.append(b"N%d" % n)
     if not notes: notes=[b"N0"]
     notes = b"%s,%d" % (b"".join(notes),max(1,int(microsecs/dedup_microsec_quantise/len(notes))))
-    if basData and basData[-1].startswith(b"DATA ") and len(basData[-1])+len(notes) < 80: basData[-1] += b","+notes
+    if basData and basData[-1].startswith(b"DATA ") and len(basData[-1])+len(notes) < 79: basData[-1] += b","+notes # 80th col is scrollbar
     else: basData.append(b"DATA "+notes)
 elif grub:
   pulselength_milliseconds = 10
@@ -460,12 +460,12 @@ Maestro_header = 'Maestro\x0a\x02'
 
 def BASIC_int(n): return chr(0x40)+chr(n>>24)+chr((n>>16)&0xFF)+chr((n>>8)&0xFF)+chr(n&0xFF)
 
-class MidiNote:
+class MaestroMidiNote:
     def __init__(self,noteNo,startTime):
         self.noteNo,self.startTime = noteNo,startTime
     def end(self,time): self.endTime = time
     def timeLen(self): return self.endTime - self.startTime
-    def quantiseTo(self,resolution):
+    def quantTo(self,resolution):
         origLen = self.endTime - self.startTime
         self.startTime = int(self.startTime/resolution) * resolution
         self.endTime = int(self.endTime/resolution) * resolution
