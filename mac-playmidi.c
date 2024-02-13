@@ -2,11 +2,16 @@
 // external MIDI port, or to software synthesis if
 // no external device is connected.
 
-// v1.12 - Silas S. Brown 2020 - public domain, no warranty
+// v1.2 - Silas S. Brown 2020,2024 - public domain, no warranty
 
 // Compile: cc -o /usr/local/bin/playmidi mac-playmidi.c -framework CoreFoundation -framework AudioToolbox -framework CoreMIDI
 
-// Run: playmidi file.mid [speed multiplier [start second [stop second]]]
+// Run: playmidi [deviceNo] file.mid [speed multiplier [start second [stop second]]]
+
+// deviceNo, if specified, is
+// -1 for internal synth (fallback default)
+// 0 for 1st attached synth (default)
+// 1 for 2nd attached synth, etc
 
 // Where to find history:
 // https://github.com/ssb22/midi-beeper.git
@@ -23,7 +28,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 
 void helpAndExit() {
-  fputs("Syntax: playmidi file.mid [speed multiplier [start second [stop second]]]\n",stderr);
+  fputs("Syntax: playmidi [deviceNo] file.mid [speed multiplier [start second [stop second]]]\n",stderr);
   exit(1);
 }
 
@@ -33,35 +38,42 @@ void stopMusic(int sig) {
 }
 
 int main(int argc,const char*argv[]) {
-  fputs("playmidi 1.12 - Silas S. Brown 2020 - public domain\n",stderr);
+  fputs("playmidi 1.2 - Silas S. Brown 2020,2024 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
-  const char *filename = argv[1];
+  int offset = 0, deviceNo = 0; // auto
+  if(atoi(argv[1]) || !strcmp(argv[1],"0")) {
+    offset=1; deviceNo=atoi(argv[1]);
+  }
+  if(argc < 2+offset) helpAndExit();
+  const char *filename = argv[1+offset];
   MusicSequence musicSeq; NewMusicSequence(&musicSeq);
   if(MusicSequenceFileLoad(musicSeq,CFURLCreateFromFileSystemRepresentation(NULL,(const UInt8*)filename,strlen(filename),false),kMusicSequenceFile_MIDIType,0)) {
     fprintf(stderr,"Cannot load MIDI from %s\n",filename);
     helpAndExit();
   }
+  if(deviceNo>=0) {
   fputs("Checking for devices... ",stderr);
   if(MIDIGetNumberOfDestinations()) {
-    if(!MusicSequenceSetMIDIEndpoint(musicSeq,MIDIGetDestination(0))) fputs("using CoreMIDI device\n",stderr);
+    if(!MusicSequenceSetMIDIEndpoint(musicSeq,MIDIGetDestination(deviceNo))) fputs("using CoreMIDI device\n",stderr);
     else fputs("unable to use; using OSX synthesis\n",stderr);
   } else fputs("none; using OSX synthesis\n",stderr);
+  }
   MusicPlayer mPlayer; NewMusicPlayer(&mPlayer);
   MusicPlayerSetSequence(mPlayer,musicSeq);
-  if(argc>3) {
-    double startSecond=atof(argv[3]);
+  if(argc>3+offset) {
+    double startSecond=atof(argv[3+offset]);
     MusicTimeStamp startPoint;
     if(!MusicSequenceGetBeatsForSeconds(musicSeq,startSecond,&startPoint)) MusicPlayerSetTime(mPlayer,startPoint);
     else {
-      fprintf(stderr,"Invalid start time: %s\n",argv[3]);
+      fprintf(stderr,"Invalid start time: %s\n",argv[3+offset]);
       helpAndExit();
     }
   }
   MusicTimeStamp stopPoint;
-  if(argc>4) {
-    double stopSecond=atof(argv[4]);
+  if(argc>4+offset) {
+    double stopSecond=atof(argv[4+offset]);
     if(MusicSequenceGetBeatsForSeconds(musicSeq,stopSecond,&stopPoint)) {
-      fprintf(stderr,"Invalid stop time: %s\n",argv[4]);
+      fprintf(stderr,"Invalid stop time: %s\n",argv[4+offset]);
       helpAndExit();
     }
   } else { // stop at end of longest track
@@ -76,10 +88,10 @@ int main(int argc,const char*argv[]) {
   }
   double stopSecs; MusicSequenceGetSecondsForBeats(musicSeq,stopPoint,&stopSecs);
   double playRate = 1.0;
-  if(argc>2) {
-    playRate=atof(argv[2]);
+  if(argc>2+offset) {
+    playRate=atof(argv[2+offset]);
     if(playRate<=0) {
-      fprintf(stderr,"Not a speed: %s\n",argv[2]);
+      fprintf(stderr,"Not a speed: %s\n",argv[2+offset]);
       helpAndExit();
     } MusicPlayerSetPlayRateScalar(mPlayer,playRate);
   }
