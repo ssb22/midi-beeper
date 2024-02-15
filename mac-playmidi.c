@@ -40,7 +40,7 @@ void stopMusic(int sig) {
 int main(int argc,const char*argv[]) {
   fputs("playmidi 1.2 - Silas S. Brown 2020,2024 - public domain\n",stderr);
   if(argc < 2) helpAndExit();
-  int offset = 0, deviceNo = 0; // auto
+  int offset = 0, deviceNo = 0;
   if(atoi(argv[1]) || !strcmp(argv[1],"0")) {
     offset=1; deviceNo=atoi(argv[1]);
   }
