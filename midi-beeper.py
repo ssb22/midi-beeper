@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.76, (c) 2007-2010,2015-2023 Silas S. Brown
+# Version 1.77, (c) 2007-2010,2015-2024 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -627,8 +627,8 @@ class MidiToBeep:
         self._current_track = 0
         self._running_status = None
         self.current_notes_on = []
-        self.rpnLsb = [0]*16
-        self.rpnMsb = [0]*16
+        self.rpn100 = [0]*16
+        self.rpn101 = [0]*16
         self.semitoneRange = [1]*16
         self.semitonesAdd = [0]*16
         self.microsecsPerDivision = 10000
@@ -639,9 +639,9 @@ class MidiToBeep:
         except ValueError: pass
     def continuous_controller(self, channel, controller, value):
         # Interpret "pitch bend range":
-        if controller==64: self.rpnLsb[channel] = value
-        elif controller==65: self.rpnMsb[channel] = value
-        elif controller==6 and self.rpnLsb[channel]==self.rpnMsb[channel]==0:
+        if controller==100: self.rpn100[channel] = value
+        elif controller==101: self.rpn101[channel] = value
+        elif controller==6 and self.rpn100[channel]==self.rpn101[channel]==0:
             self.semitoneRange[channel]=value
     def pitch_bend(self, channel, value):
         # Pitch bend is sometimes used for slurs
@@ -727,9 +727,7 @@ class EventDispatcher:
             controller, value = data
             stream.continuous_controller(channel, controller, value)
         elif high_nibble == 0xE0: # pitch bend
-            hibyte, lobyte = data
-            value = (hibyte<<7) + lobyte
-            stream.pitch_bend(channel, value)
+            stream.pitch_bend(channel, data[1])
     def meta_events(self, meta_type, data):
         stream = self.outstream
         if meta_type == 0x51: # tempo
