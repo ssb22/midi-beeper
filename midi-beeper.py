@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.77, (c) 2007-2010,2015-2024 Silas S. Brown
+# Version 1.78, (c) 2007-2010,2015-2024 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -10,7 +10,7 @@
 # sound circuits.  It emulates chords/polyphony.
 # It sounds awful, but it might be useful when no sound device
 # is attached.  It should work on any machine that has the
-# "beep" Linux package, including NSLU2 network storage devices.
+# "beep" Linux package, like old NSLU2 network storage devices.
 # (On NSLU2 do 'sudo modprobe isp4xx_beeper' before running)
 
 # Can also install a MIDI file into the GNU GRUB bootloader (sudo access required; does not work on all machines e.g. some laptops have no beeper)
@@ -41,6 +41,15 @@ bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.
 
 # Can also convert a MIDI file to DOS QBASIC code
 qbasic = 0 # or run with --qbasic
+
+# Can also get 2 macOS voices to sing text:
+# "Organ" 2nd octave Bb to 5th octave D
+# "Joelle" (less melodious) 4th C# to 5th C#
+# force_monophonic is implied with these, and the "sox" command is also required.
+# No melisma; likely works best with patter songs.
+mac_voice = "" # or run with --Organ or --Joelle
+# put syllables into environment variable SaySyls
+# (comma separated)
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -82,12 +91,14 @@ if delArg('--bbc-ssd'): bbc_ssd=bbc_micro=1
 if delArg('--bbc-sdl'): bbc_sdl=bbc_micro=1
 if delArg('--grub'): grub=1
 if delArg('--qbasic'): qbasic=1
+if delArg('--Organ'): mac_voice="Organ"
+if delArg('--Joelle'): mac_voice="Joelle"
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 on_riscos = sys.platform.lower().find("riscos")>=0
 if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
 elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
-if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic: aplay = 0
+if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic or mac_voice: aplay = 0
 
 # To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end, and quantiseTo logic
 if aplay:
@@ -293,6 +304,34 @@ elif riscos_Maestro:
   def init():
     global current_chord,current_time,riscos_channels
     current_chord = [] ; current_time = 0 ; riscos_channels = [[],[],[],[],[],[],[],[]]
+elif mac_voice:
+  force_monophonic = 1
+  if mac_voice=="Organ": noteNoToPbas,minNote,maxNote=lambda x:132.96*math.log(x+49.7)-565.5,46,74
+  elif mac_voice=="Joelle": noteNoToPbas,minNote,maxNote=lambda x:66.3*math.log(x-14)-210,61,73 # TODO: do these values depend on the exact syllable?
+  else: assert 0, "unknown mac_voice "+repr(mac_voice)+" (case sensitive)"
+  def init():
+    global pcmData,SaySyls
+    pcmData = []
+    SaySyls = os.environ["SaySyls"].split(",")
+    SaySyls.reverse() # so can use pop()
+  def add_midi_note_chord(noteNos,microsecs):
+    if not microsecs: return
+    if noteNos:
+      if not SaySyls:
+        sys.stderr.write("WARNING: ran out of syllables, check the value of SaySyls\n") ; SaySyls.append("la")
+      ThisSyl = SaySyls.pop()
+      if not ThisSyl: noteNos = [] # nothing between two commas = omit note (might be useful for small variations between verses)
+    if not noteNos: return pcmData.append(b"\0"*int(2*44100*microsecs/1000000)) # rest
+    note = noteNos[0]
+    while note<minNote: note += 12
+    while note>maxNote: note -= 12
+    cmd = 'say -v %s -r %d "[[pbas %.1f]]%s" -o %d.aiff' % (mac_voice,(60 if mac_voice=="Joelle" else min(100,int(60000000/microsecs))),noteNoToPbas(note),ThisSyl,os.getpid()) # must say at most one syllable per command for pbas to work properly on these voices
+    sys.stderr.write(cmd+"\n") ; os.system(cmd)
+    lenCheck=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 8 -' % os.getpid())
+    tempoCorrection = len((lenCheck.buffer if hasattr(lenCheck,'buffer') else lenCheck).read())*1000000/44100.0/microsecs
+    b=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 16 - tempo %g 10' % (os.getpid(),tempoCorrection))
+    pcmData.append((b.buffer if hasattr(b,'buffer') else b).read())
+    os.remove("%d.aiff" % os.getpid())
 elif qbasic:
   def init():
     global basData, dedup_microsec_quantise
@@ -634,6 +673,7 @@ class MidiToBeep:
         self.microsecsPerDivision = 10000
     def note_on(self,channel,note):
         if not channel==9: self.current_notes_on.append((channel,note))
+        if mac_voice: dedup_midi_note_chord([],None) # repeated notes must be re-struck on that o/p
     def note_off(self,channel,note):
         try: self.current_notes_on.remove((channel,note))
         except ValueError: pass
@@ -814,9 +854,9 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015-2023 Silas S. Brown.  License: Apache 2\n")
+sys.stderr.write(name+" (c) 2007-2010, 2015-2024 Silas S. Brown.  License: Apache 2\n")
 if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro | --grub | --qbasic\n")
+    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro | --grub | --qbasic | --Organ | --Joelle\n")
     sys.exit(1)
 try: xrange
 except: xrange = range # Python 3
@@ -849,6 +889,10 @@ for midiFile in sys.argv[1:]:
         basFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","")+os.extsep+"bas"
         open(basFile,'wb').write(b'\n'.join(basData+[b'DATA @,0\n']))
         sys.stderr.write("Wrote "+basFile+"\n")
+    elif mac_voice:
+        wavFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","")+os.extsep+"wav"
+        w=os.popen('sox -t raw -r 44100 -c 1 -b 16 -e signed-integer - '+wavFile,'w')
+        (w.buffer if hasattr(w,'buffer') else w).write(b''.join(pcmData)) ; w.close() ; sys.stderr.write("Wrote "+wavFile+"\n")
     elif not aplay and not grub:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))
