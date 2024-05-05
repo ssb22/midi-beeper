@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.78, (c) 2007-2010,2015-2024 Silas S. Brown
+# Version 1.79, (c) 2007-2010,2015-2024 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -50,6 +50,7 @@ qbasic = 0 # or run with --qbasic
 mac_voice = "" # or run with --Organ or --Joelle
 # put syllables into environment variable SaySyls
 # (comma separated)
+mac_voice_praat_correction = 0 # or run with --praat requires Praat, recommended for Joelle
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -93,6 +94,7 @@ if delArg('--grub'): grub=1
 if delArg('--qbasic'): qbasic=1
 if delArg('--Organ'): mac_voice="Organ"
 if delArg('--Joelle'): mac_voice="Joelle"
+if delArg('--praat'): mac_voice_praat_correction=1
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 on_riscos = sys.platform.lower().find("riscos")>=0
@@ -309,6 +311,7 @@ elif mac_voice:
   if mac_voice=="Organ": noteNoToPbas,minNote,maxNote=lambda x:132.96*math.log(x+49.7)-565.5,46,74
   elif mac_voice=="Joelle": noteNoToPbas,minNote,maxNote=lambda x:66.3*math.log(x-14)-210,61,73 # TODO: do these values depend on the exact syllable?
   else: assert 0, "unknown mac_voice "+repr(mac_voice)+" (case sensitive)"
+  if mac_voice_praat_correction: minNote,maxNote=0,127 # we can go outside the normal range if praat will fix it
   def init():
     global pcmData,SaySyls
     pcmData = []
@@ -325,13 +328,24 @@ elif mac_voice:
     note = noteNos[0]
     while note<minNote: note += 12
     while note>maxNote: note -= 12
-    cmd = 'say -v %s -r %d "[[pbas %.1f]]%s" -o %d.aiff' % (mac_voice,(60 if mac_voice=="Joelle" else min(100,int(60000000/microsecs))),noteNoToPbas(note),ThisSyl,os.getpid()) # must say at most one syllable per command for pbas to work properly on these voices
+    pid = os.getpid() # in case parallelised
+    cmd = 'say -v %s -r %d "[[pbas %.1f]]%s" -o %d.aiff' % (mac_voice,(60 if mac_voice=="Joelle" else min(100,int(60000000/microsecs))),noteNoToPbas(note),ThisSyl,pid) # must say at most one syllable per command for pbas to work properly on these voices
     sys.stderr.write(cmd+"\n") ; os.system(cmd)
-    lenCheck=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 8 -' % os.getpid())
+    lenCheck=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 8 -' % pid)
     tempoCorrection = len((lenCheck.buffer if hasattr(lenCheck,'buffer') else lenCheck).read())*1000000/44100.0/microsecs
-    b=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 16 - tempo %g 10' % (os.getpid(),tempoCorrection))
+    b=os.popen('sox %d.aiff -t raw -r 44100 -c 1 -b 16 - tempo %g 10' % (pid,tempoCorrection))
     pcmData.append((b.buffer if hasattr(b,'buffer') else b).read())
-    os.remove("%d.aiff" % os.getpid())
+    os.remove("%d.aiff" % pid)
+    if mac_voice_praat_correction:
+      b=os.popen('sox -t raw -r 44100 -c 1 -b 16 -e signed - %d.wav' % pid,'w')
+      (b.buffer if hasattr(b,'buffer') else b).write(pcmData[-1]) ; b.close()
+      open('%d.praat' % pid, 'w').write('Read from file... %d.wav\nChange gender... 75.0 600.0 1.0 %d 1.0 1.0\nnowarn Write to WAV file... %d-1.wav\nRemove\n' % (pid,to_freq(note),pid)) # misnomer: this is NOT really changing gender with these parameters, it's normalising frequency (it's the same trick I did to get Yali's Mandarin first tone syllables all the same pitch for Gradint in 2008)
+      os.system('/Applications/Praat.app/Contents/MacOS/Praat %d.praat' % pid)
+      os.remove('%d.wav' % pid)
+      os.remove('%d.praat' % pid)
+      b=os.popen('sox %d-1.wav -t raw -r 44100 -c 1 -b 16 -' % pid)
+      pcmData[-1] = (b.buffer if hasattr(b,'buffer') else b).read()
+      os.remove('%d-1.wav' % pid)
 elif qbasic:
   def init():
     global basData, dedup_microsec_quantise
