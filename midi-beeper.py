@@ -2,7 +2,7 @@
 # (can be run in either Python 2 or Python 3)
 
 # MIDI beeper (plays MIDI without sound hardware)
-# Version 1.79, (c) 2007-2010,2015-2024 Silas S. Brown
+# Version 1.8, (c) 2007-2010,2015-2024 Silas S. Brown
 # License: Apache 2 (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -49,8 +49,14 @@ qbasic = 0 # or run with --qbasic
 # No melisma; likely works best with patter songs.
 mac_voice = "" # or run with --Organ or --Joelle
 # put syllables into environment variable SaySyls
-# (comma separated)
+# (comma separated; may need to change spelling)
 mac_voice_praat_correction = 0 # or run with --praat requires Praat, recommended for Joelle
+voice_json = 0 # or run with --json: put environ
+# variable SingWords to space-separated words with
+# hyphen-separated syllables, preceded by singer
+# names in [...], for podcast:transcript on stdout
+# tested on Anytime Player and Anemone DAISY Maker
+Anytime_Player_bug_workaround = 1
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
 
@@ -95,12 +101,13 @@ if delArg('--qbasic'): qbasic=1
 if delArg('--Organ'): mac_voice="Organ"
 if delArg('--Joelle'): mac_voice="Joelle"
 if delArg('--praat'): mac_voice_praat_correction=1
+if delArg('--json'): voice_json=1
 assert not (bbc_sdl and (bbc_binary or bbc_ssd)), "bbc_sdl not compatible with bbc_binary or bbc_ssd"
 
 on_riscos = sys.platform.lower().find("riscos")>=0
 if on_riscos and not (bbc_micro or acorn_electron): riscos_Maestro = 1
 elif not aplay: aplay=int(os.environ.get("APLAY_VOL",0))
-if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic or mac_voice: aplay = 0
+if riscos_Maestro or bbc_micro or acorn_electron or grub or qbasic or mac_voice or voice_json: aplay = 0
 
 # To add a new type of beeper, get the following 'if' block to do any necessary global setup and to define the appropriate version of the per-file init() and of add_midi_note_chord(), then check the 'if' after 'ensure flushed' at end, and quantiseTo logic
 if aplay:
@@ -346,6 +353,41 @@ elif mac_voice:
       b=os.popen('sox %d-1.wav -t raw -r 44100 -c 1 -b 16 -' % pid)
       pcmData[-1] = (b.buffer if hasattr(b,'buffer') else b).read()
       os.remove('%d-1.wav' % pid)
+elif voice_json:
+  force_monophonic = 1
+  def init():
+    global SingWords,currentSpeaker,microsecsSoFar,sylsLeft
+    SingWords = os.environ["SingWords"].split()
+    SingWords.reverse() # so can use pop()
+    currentSpeaker = "singer"
+    microsecsSoFar = int(os.environ.get("SingMicrosecsOffset","0")) # (in case it won't be at the very start of the audio)
+    sylsLeft = 0
+    print('{"version":"1.0.0","segments":[')
+  def setupNextWord():
+    isSpeaker = 0
+    while True:
+      word = SingWords.pop()
+      global currentSpeaker
+      if word.startswith('[') or isSpeaker:
+        if word.startswith('['): currentSpeaker=""
+        currentSpeaker += word.replace("[","").replace("]","")
+        isSpeaker = not word.endswith(']')
+        if isSpeaker: currentSpeaker += " "
+      else:
+        global currentWord,sylsLeft ; currentWord,sylsLeft = word.replace('-',''),len(word.split('-'))
+        if Anytime_Player_bug_workaround: # v1.3.5 drops space before single-letter words
+          while SingWords and len(SingWords[-1])==1:
+            currentWord += " "+SingWords.pop()
+            sylsLeft += 1
+        break
+  def add_midi_note_chord(noteNos,microsecs):
+    global microsecsSoFar, sylsLeft, wordStartMS
+    startM,microsecsSoFar = microsecsSoFar,microsecsSoFar+microsecs
+    if not noteNos or not microsecs: return
+    if not sylsLeft:
+      wordStartMS = startM ; setupNextWord()
+    sylsLeft -= 1
+    if not sylsLeft: print('{"speaker":"%s","startTime":%g,"endTime":%g,"body":"%s"}%s' % (currentSpeaker,wordStartMS/1000000.0,microsecsSoFar/1000000.0,currentWord,(',' if SingWords else ((',{"speaker":"%s","startTime":%g,"endTime":%g,"body":""}' % (currentSpeaker,microsecsSoFar/1000000.0,microsecsSoFar/1000000.0)) if Anytime_Player_bug_workaround else '')))) # (v1.3.5 won't display last word so add a placebo)
 elif qbasic:
   def init():
     global basData, dedup_microsec_quantise
@@ -870,7 +912,7 @@ elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
 sys.stderr.write(name+" (c) 2007-2010, 2015-2024 Silas S. Brown.  License: Apache 2\n")
 if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --maestro | --grub | --qbasic | --Organ | --Joelle\n")
+    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --bbc-sdl | --maestro | --grub | --qbasic | --Organ | --Joelle (--praat --json)\n")
     sys.exit(1)
 try: xrange
 except: xrange = range # Python 3
@@ -907,6 +949,7 @@ for midiFile in sys.argv[1:]:
         wavFile = midiFile.replace(os.extsep+"midi","").replace(os.extsep+"mid","")+os.extsep+"wav"
         w=os.popen('sox -t raw -r 44100 -c 1 -b 16 -e signed-integer - '+wavFile,'w')
         (w.buffer if hasattr(w,'buffer') else w).write(b''.join(pcmData)) ; w.close() ; sys.stderr.write("Wrote "+wavFile+"\n")
+    elif voice_json: print("]}")
     elif not aplay and not grub:
         sys.stderr.write("Playing "+midiFile+"\n")
         runBeep(" ".join(cumulative_params))

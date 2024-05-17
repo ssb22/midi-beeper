@@ -31,14 +31,10 @@ from struct import pack, unpack
 def writeBew(value, length):
     return pack('>%s' % {1:'B', 2:'H', 4:'L'}[length], value)
 def varLen(value):
-    if value <= 127:
-        return 1
-    elif value <= 16383:
-        return 2
-    elif value <= 2097151:
-        return 3
-    else:
-        return 4
+    if value <= 127: return 1
+    elif value <= 16383: return 2
+    elif value <= 2097151: return 3
+    else: return 4
 def writeVar(value):
     sevens = to_n_bits(value, varLen(value))
     for i in range(len(sevens)-1):
@@ -76,19 +72,6 @@ class RawOutstreamFile:
                 self.outfile.write(self.getvalue())
     def getvalue(self):
         return self.buffer.getvalue()
-NOTE_OFF = 0x80
-NOTE_ON = 0x90
-PATCH_CHANGE = 0xC0
-MIDI_CH_PREFIX  = 0x20      
-MIDI_PORT       = 0x21      
-END_OF_TRACK    = 0x2F      
-TEMPO           = 0x51      
-TIMING_CLOCK   = 0xF8
-ACTIVE_SENSING = 0xFE
-SYSTEM_RESET   = 0xFF
-META_EVENT     = 0xFF
-def is_status(byte):
-    return (byte & 0x80) == 0x80 
 class MidiOutFile:
     def update_time(self, new_time=0):
         self._relative_time += int(new_time)
@@ -109,13 +92,13 @@ class MidiOutFile:
         trk.writeVarLen(self.rel_time())
         trk.writeSlice(slc)
     def note_on(self, channel=0, note=0x40, velocity=0x40):
-        slc = fromBytes([NOTE_ON + channel, note, velocity])
+        slc = fromBytes([0x90 + channel, note, velocity])
         self.event_slice(slc)
     def note_off(self, channel=0, note=0x40, velocity=0x40):
-        slc = fromBytes([NOTE_OFF + channel, note, velocity])
+        slc = fromBytes([0x80 + channel, note, velocity])
         self.event_slice(slc)
     def patch_change(self, channel, patch):
-        slc = fromBytes([PATCH_CHANGE + channel, patch])
+        slc = fromBytes([0xC0 + channel, patch])
         self.event_slice(slc)
     def header(self, format=0, nTracks=1, division=96):
         raw = self.raw_out
@@ -125,15 +108,6 @@ class MidiOutFile:
         bew(format, 2)
         bew(nTracks, 2)
         bew(division, 2)
-    def eof(self):
-        self.write()
-    def meta_slice(self, meta_type, data_slice):
-        "Writes a meta event"
-        slc = fromBytes([META_EVENT, meta_type]) + \
-                         writeVar(len(data_slice)) +  data_slice
-        self.event_slice(slc)
-    def meta_event(self, meta_type, data):
-        self.meta_slice(meta_type, fromBytes(data))
     def start_of_track(self, n_track=0):
         self._current_track_buffer = RawOutstreamFile()
         self.reset_time()
@@ -142,13 +116,18 @@ class MidiOutFile:
         raw = self.raw_out
         raw.writeSlice(B('MTrk'))
         track_data = self._current_track_buffer.getvalue()
-        eot_slice = writeVar(self.rel_time()) + fromBytes([META_EVENT, END_OF_TRACK, 0])
+        eot_slice = writeVar(self.rel_time()) + fromBytes([0xFF, 0x2F, 0])
         raw.writeBew(len(track_data)+len(eot_slice), 4)
         raw.writeSlice(track_data)
         raw.writeSlice(eot_slice)
     def tempo(self, value):
-        hb, mb, lb = (value>>16 & 0xff), (value>>8 & 0xff), (value & 0xff)
-        self.meta_slice(TEMPO, fromBytes([hb, mb, lb]))
+        data_slice = fromBytes([
+            (value>>16 & 0xff),
+            (value>>8 & 0xff), (value & 0xff)])
+        self.event_slice(
+            fromBytes([0xFF, 0x51]) +
+            writeVar(len(data_slice)) +
+            data_slice)
 
 mof = MidiOutFile('ringtone.mid')
 mof.header()
@@ -175,6 +154,5 @@ for velocity in [0x40,0x40,0x50,0x60,0,0x60,0x70,0x7f,0x7f,0,0x30,0x20,0x10,0x10
             mof.update_time(half_burstTime)
         mof.update_time(totalCycleLen/10)
     mof.update_time(totalCycleLen/2)
-mof.end_of_track()
-mof.eof()
+mof.end_of_track() ; mof.write()
 print ("Generated a ringtone.mid (run again for another)")

@@ -1,0 +1,16 @@
+# -*- mode: Makefile -*-
+check-if-midi-beeper-version-is-changing:
+	if (git diff;git diff --staged)|grep '^[+]# Version [1-9]'; then make -f Makefile.pypi update-midi-beeper-pypi; else true; fi
+update-midi-beeper-pypi:
+	mkdir midi_beeper
+	echo '"""MIDI Beeper is an application, not a library.  You can run it with "python -m midi_beeper" to see the options."""'> midi_beeper/__init__.py
+	cp midi-beeper.py midi_beeper/__main__.py
+	echo "def placebo(): pass # for setuptools entry_points" >> midi_beeper/__main__.py # because there's no main()
+	echo "from setuptools import setup, find_packages;setup(name='midi_beeper',version='$$(grep '^# Version [1-9]' midi-beeper.py|sed -e 's/[^ ]* Version //' -e 's/,.*//')',entry_points={'console_scripts':['midi-beeper=midi_beeper.__main__:placebo']},license='Apache 2',platforms='all',url='http://ssb22.user.srcf.net/mwrhome/midi-beeper.html',author='Silas S. Brown',author_email='ssb$$(echo 22@ca)m.ac.uk',description='Play MIDI files using piezo beepers and other sounders',long_description=r'''$$(grep -v 'also mirrored' < README.md)''',long_description_content_type='text/markdown',packages=find_packages(),classifiers=['Programming Language :: Python :: 2','Programming Language :: Python :: 3','License :: OSI Approved :: Apache Software License','Operating System :: OS Independent'],python_requires='>=2.2')" > setup.py
+	mv README.md .. # or it'll override our altered version
+	python3 setup.py sdist
+	twine upload dist/*
+	mv ../README.md .
+	rm -r midi_beeper.egg-info dist midi_beeper setup.py
+.PHONY: check-if-midi-beeper-version-is-changing
+.PHONY: update-midi-beeper-pypi
