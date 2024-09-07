@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # (can be run in either Python 2 or Python 3)
 
-# MIDI beeper (plays MIDI without sound hardware)
-# Version 1.8, (c) 2007-2010,2015-2024 Silas S. Brown
-# License: Apache 2 (see below)
+"""MIDI beeper v1.81 (c) 2007-2010,2015-2024 Silas S. Brown
+License: Apache 2""" # (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
 # through the computer's beeper instead of using proper
@@ -906,14 +905,15 @@ except: # Python 2.3 (e.g. on RISC OS 4)
       if not i: return False
     return True
 
+if delArg('--version'): print(__doc__),sys.exit(0)
+helpText = __doc__+"\nSyntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --bbc-sdl | --maestro | --grub | --qbasic | --Organ | --Joelle (--praat --json)\n"
+if len(sys.argv)<2: sys.stderr.write(helpText),sys.exit(1)
+elif delArg('--help'): print(helpText),sys.exit(0)
 if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+" (c) 2007-2010, 2015-2024 Silas S. Brown.  License: Apache 2\n")
-if len(sys.argv)<2:
-    sys.stderr.write("Syntax: python midi-beeper.py [options] MIDI-filename ...\nOptions: --bbc | --electron | --bbc-binary | --bbc-ssd | --bbc-sdl | --maestro | --grub | --qbasic | --Organ | --Joelle (--praat --json)\n")
-    sys.exit(1)
+sys.stderr.write(name+__doc__[__doc__.index(" v"):])
 try: xrange
 except: xrange = range # Python 3
 for midiFile in sys.argv[1:]:
