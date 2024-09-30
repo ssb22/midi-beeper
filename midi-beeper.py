@@ -12,7 +12,9 @@ License: Apache 2""" # (see below)
 # "beep" Linux package, like old NSLU2 network storage devices.
 # (On NSLU2 do 'sudo modprobe isp4xx_beeper' before running)
 
-# Can also install a MIDI file into the GNU GRUB bootloader (sudo access required; does not work on all machines e.g. some laptops have no beeper)
+# Can also install a MIDI file into the GNU GRUB bootloader
+# (sudo access required; does not work on all machines
+# e.g. some laptops have no beeper)
 grub = 0 # or run with --grub
 
 # Can also play MIDI files using square-wave synthesis with aplay
@@ -36,7 +38,8 @@ bbc_ssd = 0 # or run with --bbc-ssd: writes an SSD image (for an emulator) inste
 bbc_sdl = 0 # or run with --bbc-sdl: makes the BBC Micro code compatible with R.T.Russell's BBC BASIC for SDL.  Code still runs on the real BBC too, but is larger.
 
 # HiBasic (Tube) support (~30k for programs) fully works
-# Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.  However bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
+# Bas128 support (64k for programs) works but (a) bank-switching delays impact the timing of shorter notes and (b) bbc_binary option can cause "Wrap" errors during input.
+# However, bbc_binary and bbc_ssd options should pack data into a smaller space so normal BASIC can be used.
 
 # Can also convert a MIDI file to DOS QBASIC code
 qbasic = 0 # or run with --qbasic
@@ -54,7 +57,8 @@ voice_json = 0 # or run with --json: put environ
 # variable SingWords to space-separated words with
 # hyphen-separated syllables, preceded by singer
 # names in [...], for podcast:transcript on stdout
-# tested on Anytime Player and Anemone DAISY Maker
+# - tested on Anytime Player, Anemone DAISY Maker,
+# and AntennaPod 3.5
 Anytime_Player_bug_workaround = 1
 
 force_monophonic = 0  # set this to 1 to have only the top line (not normally necessary)
