@@ -1,6 +1,8 @@
 # -*- mode: Makefile -*-
-check-if-midi-beeper-version-is-changing:
+all: test check-if-midi-beeper-version-is-changing
+test:
 	@if grep '^# Version [1-9][^.]*[.][0-9][0-9][0-9]' midi-beeper.py; then echo "3+ decimal digits in version number will now need another -e 's/[.][0-9][0-9]$$/&0/' in Makefile.pypi's sed expression"; false; fi
+check-if-midi-beeper-version-is-changing:
 	if (git diff;git diff --staged)|grep '^[+]# Version [1-9]'; then make -f Makefile.pypi update-midi-beeper-pypi; else true; fi
 update-midi-beeper-pypi:
 	mkdir midi_beeper
@@ -14,4 +16,4 @@ update-midi-beeper-pypi:
 	mv ../README.md .
 	rm -r midi_beeper.egg-info dist midi_beeper setup.py
 .PHONY: check-if-midi-beeper-version-is-changing
-.PHONY: update-midi-beeper-pypi
+.PHONY: update-midi-beeper-pypi all test

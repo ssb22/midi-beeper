@@ -19,4 +19,5 @@ test:
 	python2 midi-beeper.py --bbc-ssd m1.mid && mv tunes.ssd m1-2.ssd
 	python3 midi-beeper.py --bbc-ssd m1.mid && mv tunes.ssd m1-3.ssd
 	diff m1-2.ssd m1-3.ssd
+	make -f Makefile.pypi test
 .PHONY: test
