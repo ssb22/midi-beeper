@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # (can be run in either Python 2 or Python 3)
 
-"""MIDI beeper v1.81 (c) 2007-2010,2015-2024 Silas S. Brown
+"""MIDI beeper v1.81 (c) 2007-2010,2015-2025 Silas S. Brown
 License: Apache 2""" # (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -396,7 +396,7 @@ elif qbasic:
     global basData, dedup_microsec_quantise
     basData = [b'PLAY "T255L64MLMB"']
     dedup_microsec_quantise = 60000000/255/(64/4)
-    basData+=[b'ON PLAY(1) GOSUB playTune\nr=0:PLAY ON:GOSUB playTune\nPRINT "Press any key to stop"\nDO: LOOP UNTIL INKEY$ <> ""\nEND\nplayTune:\nIF r<=0 THEN READ p$,r\nIF p$ = "@" THEN END\nPLAY p$\nr = r - 1\nRETURN']
+    basData+=[b'ON PLAY(1) GOSUB playTune\nr=0:PLAY ON:GOSUB playTune\nPRINT "Press any key to stop"\nDO: LOOP UNTIL INKEY$ <> ""\nEND\nplayTune:\nIF r<=0 THEN READ p$,r\nIF p$ = "@" THEN END\nPLAY p$\nr = r - 1\nRETURN'] # Won't work in the earlier GW-BASIC: yes you can number the lines (including for the GOSUB), rewrite the loop to WHILE INKEY$="":WEND, and paste into DOSBox to work around gwbasic being unable to load this program from a text file, but the ON PLAY check gets dropped after about 1 chord.
   def add_midi_note_chord(noteNos,microsecs):
     notes = []
     for n in noteNos:
