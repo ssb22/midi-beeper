@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # (can be run in either Python 2 or Python 3)
 
-"""MIDI beeper v1.81 (c) 2007-2010,2015-2025 Silas S. Brown
+"""MIDI beeper v1.82 (c) 2007-2010,2015-2025 Silas S. Brown
 License: Apache 2""" # (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -480,7 +480,6 @@ def make_bbcMicro_DFS_image(datFiles):
   if "BOOT_COPYRIGHT" in os.environ: data += "\rREM "+os.environ["BOOT_COPYRIGHT"]+"\r\r" # TODO: document this?
   if len(datFiles)==1: data += ('LOAD "%s"\rLIST\rRUN\r' % datFiles[0][0])
   else: data += "*CAT\r"+"REP.U.AD.-6=15:".join(('CH."%s"\r' % f) for f,_ in datFiles)
-  nextSector = 2+int((len(data)+255)/256)
   catNames[0]="!BOOT  $"
   catInfo[0]="".join([
     "\0"*4, # !BOOT lsb-msb Load, lsb-msb Exec
@@ -564,7 +563,6 @@ class MaestroMidiNote:
     def end(self,time): self.endTime = time
     def timeLen(self): return self.endTime - self.startTime
     def quantTo(self,resolution):
-        origLen = self.endTime - self.startTime
         self.startTime = int(self.startTime/resolution) * resolution
         self.endTime = int(self.endTime/resolution) * resolution
         if self.endTime == self.startTime: self.endTime += resolution # try to avoid quantising it out completely
