@@ -53,6 +53,12 @@ mac_voice = "" # or run with --Organ or --Joelle
 # put syllables into environment variable SaySyls
 # (comma separated; may need to change spelling)
 mac_voice_praat_correction = 0 # or run with --praat requires Praat, recommended for Joelle
+# - the Apple Software License Agreement says you may use
+# these voices "to create your own original content and
+# projects for your personal, non-commercial use" so you may
+# want to take extra caution you're not getting any revenue.
+# (This does not affect your Apache 2 rights to this script)
+
 voice_json = 0 # or run with --json: put environ
 # variable SingWords to space-separated words with
 # hyphen-separated syllables, preceded by singer
