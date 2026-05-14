@@ -38,7 +38,7 @@ void stopMusic(int sig) {
 }
 
 int main(int argc,const char*argv[]) {
-  fputs("playmidi 1.2 - Silas S. Brown 2020,2024 - public domain\n",stderr);
+  fputs("playmidi 1.2 - Silas S. Brown 2020,2024 - public domain\n",stderr); // "no warranty" is in comment above, do we need it on-screen also, possibly going onto next line on narrow displays?
   if(argc < 2) helpAndExit();
   int offset = 0, deviceNo = 0;
   if(atoi(argv[1]) || !strcmp(argv[1],"0")) {
