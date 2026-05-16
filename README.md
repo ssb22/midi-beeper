@@ -34,6 +34,8 @@ To record in GarageBand ’11 6.0.5 on MacOS 10.7.5: new track (Cmd-Shift-N or b
 
 For fun with ground-bass loops if you don’t mind playback being via the Mac: GarageBand / Preferences / General: “Cycle Recording (Automatically merge Software Instrument recordings when using the cycle region)”, then record, then add a loop with Control / Snap to Grid (Cmd-G) switched OFF, then record again to add layers to the loop.
 
+* Or you could use a Raspberry Pi or other GNU/Linux computer with my [command-line midi-looper script](midi-looper.py).
+
 ## Other
 
 MIDI Beeper can also generate code for the old `PLAY` command in QBasic for DOS, and for the GNU/Linux GRUB bootloader on machines where this has a beeper available (this is generally no longer the case on modern machines).
