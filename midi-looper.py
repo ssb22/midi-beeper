@@ -50,6 +50,7 @@ def loop(silenceSecs=2):
         track = mido.MidiTrack()
         track.append(mido.MetaMessage('set_tempo',tempo=500000))
         mf.tracks.append(track); t0 = 0
+        loop.sort(key=lambda x:x[0])
         for t,msg in loop:
             track.append(msg.copy(time=mido.second2tick(t-t0,mf.ticks_per_beat,500000)))
             t0 = t
