@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MIDI looper for Raspberry Pi + USB MIDI keyboard
-Silas S. Brown 2026 - public domain
+Silas S. Brown 2026 - public domain - no warranty
 
 Records until silence, then loops with overdubbing.
 Ctrl+C to stop and save."""
@@ -41,6 +41,7 @@ def loop(silenceSecs=2):
         time.sleep(0.01)
     except KeyboardInterrupt: print("\nStopping...")
     finally:
+      t = time.monotonic()
       if playing:
         print("\nSending All Notes Off...")
         for ch in range(16): port_out.send(mido.Message('control_change',channel=ch,control=120,value=0)),port_out.send(mido.Message('control_change',channel=ch,control=123,value=0))
@@ -49,8 +50,9 @@ def loop(silenceSecs=2):
         mf = mido.MidiFile(ticks_per_beat=480)
         track = mido.MidiTrack()
         track.append(mido.MetaMessage('set_tempo',tempo=500000))
-        mf.tracks.append(track); t0 = 0
-        loop.sort(key=lambda x:x[0])
+        mf.tracks.append(track)
+        for c,n in active_notes: loop.append((t-t0,mido.Message('note_off',channel=c,note=n)))
+        loop.sort(key=lambda x:x[0]); t0 = 0
         for t,msg in loop:
             track.append(msg.copy(time=mido.second2tick(t-t0,mf.ticks_per_beat,500000)))
             t0 = t
