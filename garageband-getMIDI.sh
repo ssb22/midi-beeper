@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # Read MIDI data out of saved GarageBand loops.
-# Silas S. Brown 2020,2022,2024 - public domain - no warranty.
+# (c) Silas S. Brown 2020,2022,2024.  License: Apache 2
+# (I did say "public domain no warranty" but apparently
+# some corporate offices don't trust that.  Apache 2 lets
+# them know I don't have a silly patent up my sleeve that
+# I'd try to enforce, so their policy might accept it more
+# easily if you need to use this at work.)
 
 # Tested on GarageBand '11 6.0.5 on MacOS 10.7.5:
 # New track (Cmd-Shift-N or bottom-left "+" icon),

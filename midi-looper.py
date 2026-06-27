@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """MIDI looper for Raspberry Pi + USB MIDI keyboard
-Silas S. Brown 2026 - public domain - no warranty
+(c) Silas S. Brown 2026.  License: Apache 2
 
 Records until silence, then loops with overdubbing.
 Ctrl+C to stop and save."""
+# (I did say "public domain no warranty" but apparently
+# some corporate offices don't trust that.  Apache 2 lets
+# them know I don't have a silly patent up my sleeve that
+# I'd try to enforce, so their policy might accept it more
+# easily if you need to use this at work.)
+
 import sys,time,datetime,queue
 def loop(silenceSecs=2):
     print("Loading mido...") # Pi 1 B+: 4 to 15 seconds
