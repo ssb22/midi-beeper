@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # (can be run in either Python 2 or Python 3)
 
-"""MIDI beeper v1.82 (c) 2007-2010,2015-2025 Silas S. Brown
+"""MIDI beeper v1.82 (c) 2007-2010,2015-2026 Silas S. Brown
 License: Apache 2""" # (see below)
 
 # MIDI beeper is a Python program to play MIDI by beeping
@@ -921,7 +921,7 @@ if acorn_electron: name = "MIDI to Acorn Electron"
 elif (bbc_micro or bbc_micro==[]): name = "MIDI to BBC Micro"
 elif riscos_Maestro: name = "MIDI to Maestro"
 else: name = "MIDI Beeper"
-sys.stderr.write(name+__doc__[__doc__.index(" v"):])
+sys.stderr.write(name+__doc__[__doc__.index(" v"):]+"\n")
 try: xrange
 except: xrange = range # Python 3
 for midiFile in sys.argv[1:]:
